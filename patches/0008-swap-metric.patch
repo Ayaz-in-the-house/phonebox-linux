@@ -1,0 +1,48 @@
+PhoneBox 0.6.9 — panel: swap metric.
+- METRICS.swap (stat / gauge / chart), hist.swap, a Swap row in meters (only when the agent sends swapTotalGb).
+- Data: pc.swapUsedGb / pc.swapTotalGb (sent by the Rust agent in this repository; 0.6.9's agent does not send it).
+
+diff --git a/android/app/src/main/assets/www/main.js b/android/app/src/main/assets/www/main.js
+index e5a98ce..d002012 100644
+--- a/android/app/src/main/assets/www/main.js
++++ b/android/app/src/main/assets/www/main.js
+@@ -71,7 +71,7 @@ export let pushVersion = null;
+ export const D = { state: null, quotas: null, work: null, procs: null, push: {}, weather: null, calendar: null, notes: store.get('notes', []) };
+ 
+ export const HIST = 90;
+-export const hist = { cpu: [], gpu: [], ram: [], vram: [], down: [], up: [], ping: [], gputemp: [], cputemp: [] };
++export const hist = { cpu: [], gpu: [], ram: [], swap: [], vram: [], down: [], up: [], ping: [], gputemp: [], cputemp: [] };
+ export const pushHist = (k, v) => { const a = hist[k]; a.push(v ?? 0); if (a.length > HIST) a.shift(); };
+ 
+ // ---------------------------------------------------------------- helpers
+@@ -247,6 +247,10 @@ export const METRICS = {
+     }, title: (s) => gpuOf(s)?.name },
+   ram: { label: 'RAM', name: 'Memory', color: '--ram', unit: 'GB', max: (s) => s.pc?.ramTotalGb || 1, val: (s) => s.pc?.ramUsedGb, fmt: r1,
+     pct: (s) => (s.pc ? (s.pc.ramUsedGb / s.pc.ramTotalGb) * 100 : null), sub: (s) => (s.pc && s.pc.ramTotalGb ? `${r1(s.pc.ramUsedGb)} / ${Math.round(s.pc.ramTotalGb)} GB` : '') },
++  // Swap (pc.swapUsedGb / pc.swapTotalGb) comes from our agent (phoned, EXPERIENCE-ARCHITECTURE.md K5); PhoneBox 0.6.9 does not send it.
++  swap: { label: 'SWAP', name: 'Swap', color: '--ram', unit: 'GB', max: (s) => s.pc?.swapTotalGb || 1, val: (s) => s.pc?.swapUsedGb, fmt: r1,
++    pct: (s) => (s.pc?.swapTotalGb ? (s.pc.swapUsedGb / s.pc.swapTotalGb) * 100 : null),
++    sub: (s) => (s.pc?.swapTotalGb ? `${r1(s.pc.swapUsedGb)} / ${Math.round(s.pc.swapTotalGb)} GB` : 'No swap data') },
+   vram: { label: 'VRAM', name: 'Video memory', color: '--gpu', unit: '%', max: () => 100,
+     val: (s) => (gpuOf(s)?.vramTotal ? (gpuOf(s).vramUsed / gpuOf(s).vramTotal) * 100 : null),
+     sub: (s) => (gpuOf(s)?.vramTotal ? `${r1(gpuOf(s).vramUsed)} / ${Math.round(gpuOf(s).vramTotal)} GB` : '') },
+@@ -1425,6 +1429,7 @@ export function sampleHist() {
+   pushHist('cpu', pc.cpu);
+   pushHist('gpu', pc.gpu?.util);
+   pushHist('ram', pc.ramUsedGb);
++  pushHist('swap', pc.swapUsedGb);
+   pushHist('vram', pc.gpu?.vramTotal ? (pc.gpu.vramUsed / pc.gpu.vramTotal) * 100 : 0);
+   pushHist('down', pc.netDownBps);
+   pushHist('up', pc.netUpBps);
+diff --git a/android/app/src/main/assets/www/widgets/basic.js b/android/app/src/main/assets/www/widgets/basic.js
+index 6af8eb2..3c565ad 100644
+--- a/android/app/src/main/assets/www/widgets/basic.js
++++ b/android/app/src/main/assets/www/widgets/basic.js
+@@ -284,6 +284,7 @@ W.meters = {
+         // rows as data first; the DOM is rebuilt only when a shown text or bar length (0.1 %) changed
+         const rows = [['RAM', `${r1(pc.ramUsedGb)} / ${Math.round(pc.ramTotalGb)} GB`, (pc.ramUsedGb / pc.ramTotalGb) * 100, null]];
+         const g = pc.gpu;
++        if (pc.swapTotalGb) rows.push(['Swap', `${r1(pc.swapUsedGb)} / ${Math.round(pc.swapTotalGb)} GB`, (pc.swapUsedGb / pc.swapTotalGb) * 100, '--up']);
+         if (g && g.vramTotal) rows.push(['VRAM', `${r1(g.vramUsed)} / ${Math.round(g.vramTotal)} GB`, (g.vramUsed / g.vramTotal) * 100, '--gpu']);
+         const dks = (pc.disks || []).map((dk) => [dk.name, Math.round((dk.usedGb / dk.totalGb) * 100) + '%', (dk.usedGb / dk.totalGb) * 100, '#94a3b8']);
+         const key = JSON.stringify([...rows, ...dks].map((r) => [r[0], r[1], Math.round(r[2] * 10)]));

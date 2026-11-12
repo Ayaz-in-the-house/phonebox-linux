@@ -1,0 +1,22 @@
+# tools/apk/versions.lock — APK araç zincirinin sabit sürümleri (bash `source` edilebilir, KEY="değer").
+# Her satırın kaynağı APK-BUILD.md § Araç zinciri. Elle değişir; değiştiren `measured` satırını ve belgeyi günceller.
+measured="2026-11-10"
+IMAGE_TAG="phone-panel-apk:2026-11-10"
+# eclipse-temurin:17-jdk-noble → docker pull (buildbox, 2026-11-10) RepoDigests · Temurin-17.0.21+9 · Ubuntu 24.04.5
+BASE_IMAGE="eclipse-temurin@sha256:ec2c8050c856a00986776ddd94d4facc9e872430c27799108ca318a26f9f1887"
+# cmdline-tools 22.0: SHA-256 developer.android.com/studio · SHA-1 dl.google.com/android/repository/repository2-3.xml (iki bağımsız resmî yüzey)
+CMDLINE_TOOLS_ZIP="commandlinetools-linux-15859902_latest.zip"
+CMDLINE_TOOLS_SHA256="4e4c464f145a7512b57d088ac6c278c03c9eea610886b35a5e0804e74eedf583"
+CMDLINE_TOOLS_SHA1="040d3996a65543d22ec4bf73e4c37aa37a8d4af4"
+# upstream android/app/build.gradle.kts compileSdk=35 · AGP 8.7.3 varsayılan build-tools
+SDK_PACKAGES="platforms;android-35 build-tools;34.0.0"
+SDK_PLATFORM_REVISION="2"
+# services.gradle.org/distributions/gradle-8.11.1-{bin.zip,wrapper.jar}.sha256 (upstream wrapper jar bu değerle eşleşti)
+GRADLE_DIST_SHA256="f397b287023acdba1e9f6fc5ea72d22dd63669d59ed4a289a29b1a76eee151c6"
+GRADLE_WRAPPER_JAR_SHA256="2db75c40782f5e8ba1fc278a5574bab070adccb2d21ca5a6e5ed840888448046"
+# PhoneBox 0.6.9 (ersinkoc/phonebox, MIT) — refpool klonu
+UPSTREAM_COMMIT="620c904b5e93dc8a30db2513dbaa40d05399eb6c"
+UPSTREAM_VERSION="0.6.9"
+# upstream sürüm APK'sı: GitHub release asset digest = SHA256SUMS-0.6.9.txt = telefondaki base.apk (2026-11-10, üç kaynak)
+UPSTREAM_APK_SHA256="800700797a19b6f8de4feb6b5359aafbc027a99a7a100489edcae53d84782fdc"
+UPSTREAM_APK_URL="https://github.com/ersinkoc/phonebox/releases/download/v0.6.9/PhoneBox-0.6.9.apk"

@@ -1,0 +1,102 @@
+{
+ "endpoint": "/api/settings",
+ "status": 200,
+ "content_type": "application/json; charset=utf-8",
+ "bytes": 30143,
+ "shape": {
+  "adbPath": "str",
+  "calendars": [],
+  "charge": {
+   "enabled": "bool",
+   "max": "int",
+   "method": "str",
+   "min": "int"
+  },
+  "claude": {
+   "onlyWhenAway": "bool",
+   "phoneApprovals": "bool",
+   "timeoutSec": "int"
+  },
+  "deviceSerial": "str",
+  "display": {
+   "accent": "str",
+   "artTint": "bool",
+   "autoBrightness": "bool",
+   "holdMaxMin": "int",
+   "homeScreen": "bool",
+   "idleReturnSec": "int",
+   "keepAwake": "bool",
+   "minDwellSec": "int",
+   "nightWhenDark": "bool",
+   "orientation": "str",
+   "pin": "bool",
+   "proximityWake": "bool",
+   "showSeconds": "bool",
+   "switchCountdownSec": "int",
+   "theme": "str",
+   "touchGraceSec": "int",
+   "vibrate": "bool",
+   "volumeKeys": "bool"
+  },
+  "homeAssistant": {},
+  "lan": {
+   "enabled": "bool",
+   "port": "int",
+   "token": "str",
+   "webhookToken": "str"
+  },
+  "night": {
+   "brightness": "float",
+   "enabled": "bool",
+   "end": "str",
+   "start": "str"
+  },
+  "obs": {
+   "enabled": "bool",
+   "url": "str"
+  },
+  "pages": [
+   {
+    "enabled": "bool",
+    "icon": "str",
+    "id": "str",
+    "title": "str",
+    "widgets": [
+     {
+      "h": "int",
+      "id": "str",
+      "options": {
+       "status": "bool",
+       "weather": "bool"
+      },
+      "type": "str",
+      "w": "int",
+      "x": "int",
+      "y": "int"
+     }
+    ]
+   }
+  ],
+  "phones": [],
+  "rules": [],
+  "shortcuts": [
+   {
+    "cmd": "str",
+    "color": "str",
+    "icon": "str",
+    "id": "str",
+    "label": "str",
+    "toggle": "bool"
+   }
+  ],
+  "updates": {
+   "auto": "bool",
+   "repo": "str"
+  },
+  "weather": {
+   "city": "str",
+   "lat": "float",
+   "lon": "float"
+  }
+ }
+}

@@ -1,0 +1,23 @@
+{
+ "endpoint": "/api/obs",
+ "status": 200,
+ "content_type": "application/json; charset=utf-8",
+ "bytes": 216,
+ "shape": {
+  "control": "bool",
+  "enabled": "bool",
+  "snapshot": {
+   "connected": "bool",
+   "error": "NoneType",
+   "micMuted": "NoneType",
+   "micName": "NoneType",
+   "recordMs": "int",
+   "recordPaused": "bool",
+   "recording": "bool",
+   "scene": "NoneType",
+   "scenes": [],
+   "streamMs": "int",
+   "streaming": "bool"
+  }
+ }
+}

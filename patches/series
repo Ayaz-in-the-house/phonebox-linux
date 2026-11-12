@@ -1,0 +1,13 @@
+0001-pager-fast-settle-page-buttons.patch
+0002-visible-pages-only.patch
+0003-fast-tick-only-when-needed.patch
+0004-no-endless-animations.patch
+0005-local-sample-clock.patch
+0006-incremental-chart.patch
+0007-skip-unchanged-leaves.patch
+0008-swap-metric.patch
+0009-pages-own-layers.patch
+0010-volume-slider-intent.patch
+0011-media-youtube-client.patch
+0012-native-mic-permission.patch
+0013-dictate-button.patch

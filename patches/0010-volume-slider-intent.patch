@@ -1,0 +1,180 @@
+PhoneBox 0.6.9 — panel: a page swipe never drags the volume slider.
+Why (measured on the phone): a horizontal swipe that starts on the media widget's <input type=range> is taken by the native slider ->
+volume jumps (16 unintended changes in 9 minutes) and the page does not move. Same class for the volume widget (.vb).
+- intentSlide(): a horizontal gesture (|dx| >= |dy|, 10 px) belongs to the pager; value changes only on vertical drag or press-and-hold
+  (280 ms) + drag; a single tap does not change the value; requests are rate-limited (<= 8/s) and the last value is always sent.
+
+diff --git a/android/app/src/main/assets/www/main.js b/android/app/src/main/assets/www/main.js
+index d002012..005978f 100644
+--- a/android/app/src/main/assets/www/main.js
++++ b/android/app/src/main/assets/www/main.js
+@@ -923,6 +923,48 @@ const release = () => {
+ pager.addEventListener('touchend', (e) => { if (!e.touches.length) release(); }, { passive: true });
+ pager.addEventListener('touchcancel', release, { passive: true });
+ 
++// Sliders inside the horizontal pager (media volume, volume widget). A sideways swipe is the pager's, never a value change — also when
++// it starts on a slider or while a page is still settling. A value changes only with intent: a vertical drag, or press-and-hold
++// (HOLD_MS) then any drag; a plain tap changes nothing. slide(d) gets the signed travel in px (right / up = more). W3-PANEL TP-W3-13..16.
++export const SLIDE_SLOP = 10, HOLD_MS = 280;
++export const VOL_SEND_MS = 120;   // ≤ 8 volume requests / s while dragging (card: ≤ 10 / s), the last value always goes out
++const pagerAtRest = () => !settling && Math.abs(pager.scrollLeft / window.innerWidth - Math.round(pager.scrollLeft / window.innerWidth)) < 0.005;
++export function intentSlide(el, { skip, start, slide, end }) {
++  let g = null;
++  const stop = () => { if (g) clearTimeout(g.hold); g = null; };
++  const grab = (x, y) => { g.mode = 'slide'; g.x = x; g.y = y; start(); };
++  el.addEventListener('touchstart', (e) => {
++    stop();
++    if (e.touches.length !== 1 || (skip && skip(e))) return;
++    const t = e.touches[0];
++    g = { x: t.clientX, y: t.clientY, mode: pagerAtRest() ? 'wait' : 'pan', hold: 0 };
++    if (g.mode === 'wait') g.hold = setTimeout(() => { if (g && g.mode === 'wait') { haptic(); grab(g.x, g.y); } }, HOLD_MS);
++  }, { passive: true });
++  el.addEventListener('touchmove', (e) => {
++    if (!g || g.mode === 'pan') return;
++    const t = e.touches[0], dx = t.clientX - g.x, dy = t.clientY - g.y;
++    if (g.mode === 'wait') {
++      if (Math.max(Math.abs(dx), Math.abs(dy)) < SLIDE_SLOP) return;
++      clearTimeout(g.hold);
++      if (Math.abs(dx) >= Math.abs(dy)) { g.mode = 'pan'; return; }   // sideways first: a page swipe, the pager scrolls natively
++      grab(t.clientX, t.clientY);
++      return;
++    }
++    e.preventDefault();   // the slider owns this touch: the pager must not scroll under it
++    const ex = t.clientX - g.x, ey = g.y - t.clientY;
++    slide(Math.abs(ex) >= Math.abs(ey) ? ex : ey);
++  }, { passive: false });
++  const fin = () => { if (g && g.mode === 'slide') end(); stop(); };
++  el.addEventListener('touchend', fin, { passive: true });
++  el.addEventListener('touchcancel', fin, { passive: true });
++}
++/** fn(v) at most once per ms; the last value always goes out (trailing call). */
++export function rateLimited(fn, ms = 100) {
++  let last = -Infinity, timer = 0, v;
++  const run = () => { timer = 0; last = performance.now(); fn(v); };
++  return (x) => { v = x; if (timer) return; const wait = last + ms - performance.now(); if (wait <= 0) run(); else timer = setTimeout(run, wait); };
++}
++
+ export function goPage(i, instant = false) {
+   i = Math.max(0, Math.min(pages.length - 1, i));
+   if (!instant) { settle(i); return; }
+diff --git a/android/app/src/main/assets/www/style.css b/android/app/src/main/assets/www/style.css
+index d89665f..0b18d23 100644
+--- a/android/app/src/main/assets/www/style.css
++++ b/android/app/src/main/assets/www/style.css
+@@ -285,6 +285,10 @@ body.night #navCard, body.night #navChip { display: none; }
+ .i-mute, .muted-on .i-vol { display: none; }
+ .muted-on .i-mute { display: block; color: var(--err); }
+ .vol { flex: 1; display: flex; align-items: center; gap: 4px; margin-left: 4px; min-width: 0; }
++/* A sideways swipe over the volume row is a page swipe (pan-x). The native range never takes the finger (it would turn the swipe into
++   a value); basic.js drives it: touch via intentSlide (vertical drag or press-and-hold), mouse directly. W3-PANEL TP-W3-13..16 (0010). */
++.w-media .vol { touch-action: pan-x; }
++.w-media .volr { pointer-events: none; }
+ .vol-val { font-size: 11px; color: var(--muted); width: 22px; text-align: right; }
+ input[type=range] { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0; height: 28px; background: transparent; }
+ input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--text) var(--p, 50%), rgba(255, 255, 255, .14) var(--p, 50%)); }
+@@ -735,7 +739,7 @@ body.offline .offline-msg { display: flex; }
+ /* ---------- volume ---------- */
+ .w-volume { padding: 9px 12px; display: flex; flex-direction: column; gap: 6px; }
+ .vb-row { flex: 1; min-height: 0; display: flex; align-items: center; gap: 10px; }
+-.vb { flex: 1; height: 26px; border-radius: 13px; background: rgba(255, 255, 255, .08); overflow: hidden; position: relative; touch-action: none; }
++.vb { flex: 1; height: 26px; border-radius: 13px; background: rgba(255, 255, 255, .08); overflow: hidden; position: relative; touch-action: pan-x; }
+ .vb i { position: absolute; left: 0; bottom: 0; background: var(--text); border-radius: inherit; }
+ .w-volume.muted .vb i { background: var(--dim); }
+ .vb-v { font-size: clamp(12px, 9cqh, 22px); font-weight: 500; min-width: 3.2em; text-align: right; }
+diff --git a/android/app/src/main/assets/www/widgets/basic.js b/android/app/src/main/assets/www/widgets/basic.js
+index 3c565ad..011e328 100644
+--- a/android/app/src/main/assets/www/widgets/basic.js
++++ b/android/app/src/main/assets/www/widgets/basic.js
+@@ -1,4 +1,4 @@
+-import { $, API, D, armFast, histSeq, setKids, setText, setVar, LEVEL_COLOR, LOCALE, MEDIA_HTML, METRICS, Q_STYLE, S_ORDER, ago, api, averageColor, buzz, cfg, chart, color, cssVar, emit, fillIcon, fmtDur, fmtMem, fmtReset, fmtTime, fmtValue, h, haptic, hist, keyButton, levelOf, media, metricText, online, openSheet, paceInfo, pad, prRow, pushView, quotaProviders, r1, renderStatus, ringSvg, setArtColor, setVolDragging, shortDur, store, tick, toast, volDragging, wxBlock, wxIcon } from '../main.js';
++import { $, API, D, armFast, intentSlide, rateLimited, VOL_SEND_MS, histSeq, setKids, setText, setVar, LEVEL_COLOR, LOCALE, MEDIA_HTML, METRICS, Q_STYLE, S_ORDER, ago, api, averageColor, buzz, cfg, chart, color, cssVar, emit, fillIcon, fmtDur, fmtMem, fmtReset, fmtTime, fmtValue, h, haptic, hist, keyButton, levelOf, media, metricText, online, openSheet, paceInfo, pad, prRow, pushView, quotaProviders, r1, renderStatus, ringSvg, setArtColor, setVolDragging, shortDur, store, tick, toast, volDragging, wxBlock, wxIcon } from '../main.js';
+ import { W } from '../registry.js';
+ 
+ // ================================================================= widgets
+@@ -90,7 +90,7 @@ W.media = {
+     box.innerHTML = MEDIA_HTML;
+     const q = (s) => box.querySelector(s);
+     const img = q('.art'), vol = q('.volr');
+-    let artId = -1, volTimer = 0;
++    let artId = -1;
+     img.addEventListener('load', () => { img.classList.add('on'); setArtColor(averageColor(img)); });
+     img.addEventListener('error', () => img.classList.remove('on'));
+     box.querySelectorAll('[data-media]').forEach((btn) => btn.addEventListener('click', async () => {
+@@ -113,13 +113,27 @@ W.media = {
+       try { await api('/media/seek?ms=' + ms, 'POST'); } catch (_) {}
+     });
+     const paintVol = (v) => { setVar(vol, '--p', v + '%'); setText(q('.vol-val'), v); };
+-    vol.addEventListener('input', () => {
+-      setVolDragging(true);
+-      paintVol(vol.value);
+-      clearTimeout(volTimer);
+-      volTimer = setTimeout(() => api('/volume?level=' + vol.value, 'POST').catch(() => {}), 120);
++    let sent = -1;
++    const send = rateLimited((v) => { if (v !== sent) { sent = v; api('/volume?level=' + v, 'POST').catch(() => {}); } }, VOL_SEND_MS);
++    const setVol = (v) => { v = Math.round(Math.max(0, Math.min(100, v))); if (+vol.value !== v) vol.value = v; paintVol(v); send(v); };
++    const release = () => setTimeout(() => setVolDragging(false), 600);
++    // The range never takes pointer input (style.css): keyboard still works through it; mouse and touch are driven here.
++    vol.addEventListener('input', () => { setVolDragging(true); paintVol(vol.value); send(+vol.value); });
++    vol.addEventListener('change', release);
++    const row = q('.vol'), atMouse = (e) => { const r = vol.getBoundingClientRect(); setVol(((e.clientX - r.left) / r.width) * 100); };
++    let mouse = false, v0 = 0;
++    row.addEventListener('pointerdown', (e) => {
++      if (e.pointerType !== 'mouse' || e.target.closest('.mute')) return;
++      mouse = true; setVolDragging(true); row.setPointerCapture(e.pointerId); atMouse(e);
++    });
++    row.addEventListener('pointermove', (e) => { if (mouse) atMouse(e); });
++    row.addEventListener('pointerup', () => { if (mouse) { mouse = false; release(); } });
++    intentSlide(row, {
++      skip: (e) => !!e.target.closest('.mute'),
++      start: () => { setVolDragging(true); v0 = +vol.value; sent = -1; },
++      slide: (d) => setVol(v0 + (d / Math.max(60, vol.clientWidth)) * 100),
++      end: release,
+     });
+-    vol.addEventListener('change', () => setTimeout(() => setVolDragging(false), 600));
+     q('.mute').addEventListener('click', async () => {
+       haptic();
+       try { const a = await api('/volume?op=mute', 'POST'); D.state && (D.state.audio = a); emit('state'); } catch (_) {}
+diff --git a/android/app/src/main/assets/www/widgets/pc.js b/android/app/src/main/assets/www/widgets/pc.js
+index 33dd82b..a8ae1ef 100644
+--- a/android/app/src/main/assets/www/widgets/pc.js
++++ b/android/app/src/main/assets/www/widgets/pc.js
+@@ -1,4 +1,4 @@
+-import { $, API, D, setText, PANEL_HEADERS, LOCALE, Q_STYLE, api, bridge, cfg, color, rulesPaused, toggleRulesPause, fillIcon, fmtDur, fmtMem, gotoPageRef, h, haptic, openSheet, paceInfo, pad, quotaProviders, store, tick, toast } from '../main.js';
++import { $, API, D, intentSlide, rateLimited, VOL_SEND_MS, setText, PANEL_HEADERS, LOCALE, Q_STYLE, api, bridge, cfg, color, rulesPaused, toggleRulesPause, fillIcon, fmtDur, fmtMem, gotoPageRef, h, haptic, openSheet, paceInfo, pad, quotaProviders, store, tick, toast } from '../main.js';
+ import { W } from '../registry.js';
+ import { canKillAnywhere, dialEl, every } from './helpers.js';
+ 
+@@ -430,7 +430,8 @@ W.volume = {
+     const fill = h('i'), bar = h('div', 'vb', fill), pct = h('div', 'vb-v', '--');
+     const mute = h('button', 'pb', '🔇'), down = h('button', 'pb', '−'), up = h('button', 'pb', '+');
+     box.append(h('div', 'w-title', 'Volume'), h('div', 'vb-row', bar, pct), h('div', 'pomo-btns', mute, down, up));
+-    let dragging = false, timer = 0, level = 0;
++    let dragging = false, level = 0, v0 = 0;
++    const send = rateLimited((v) => api('/volume?level=' + v, 'POST').catch(() => {}), VOL_SEND_MS);
+     const vertical = () => box.clientHeight > box.clientWidth * 1.15;
+     const paint = (v, muted) => {
+       level = v;
+@@ -445,12 +446,18 @@ W.volume = {
+       const f = vertical() ? 1 - (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width;
+       const v = Math.round(Math.max(0, Math.min(1, f)) * 100);
+       paint(v, false);
+-      clearTimeout(timer);
+-      timer = setTimeout(() => api('/volume?level=' + v, 'POST').catch(() => {}), 80);
++      send(v);
+     };
+-    bar.addEventListener('pointerdown', (e) => { dragging = true; bar.setPointerCapture(e.pointerId); fromPointer(e); });
+-    bar.addEventListener('pointermove', (e) => { if (dragging) fromPointer(e); });
+-    bar.addEventListener('pointerup', () => setTimeout(() => (dragging = false), 400));
++    // Mouse: press = value at the pointer. Touch: a sideways swipe is the pager's (.vb touch-action: pan-x); intentSlide decides.
++    bar.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') return; dragging = true; bar.setPointerCapture(e.pointerId); fromPointer(e); });
++    bar.addEventListener('pointermove', (e) => { if (dragging && e.pointerType !== 'touch') fromPointer(e); });
++    bar.addEventListener('pointerup', (e) => { if (e.pointerType !== 'touch') setTimeout(() => (dragging = false), 400); });
++    intentSlide(bar, {
++      start: () => { dragging = true; v0 = level; },
++      slide: (d) => { const r = bar.getBoundingClientRect(), v = Math.round(Math.max(0, Math.min(100, v0 + d / Math.max(60, vertical() ? r.height : r.width) * 100)));
++        paint(v, false); send(v); },
++      end: () => setTimeout(() => (dragging = false), 400),
++    });
+     const op = (q) => async () => { haptic(); try { const a = await api('/volume?' + q, 'POST'); paint(a.volume, a.muted); } catch (_) {} };
+     mute.addEventListener('click', op('op=mute'));
+     down.addEventListener('click', op('op=down'));

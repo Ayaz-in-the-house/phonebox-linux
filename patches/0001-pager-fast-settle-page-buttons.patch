@@ -1,0 +1,127 @@
+PhoneBox 0.6.9 (620c904) — pager: fast settle (200 ms) + page buttons in landscape.
+Why: the browser's own smooth-scroll / scroll-snap settle animation takes 520–690 ms on the phone (independent of CPU throttling).
+- goPage(i): own rAF settle (SETTLE_MS 200, ease-out); overflow-x hidden during settle so a fling cannot overshoot a page.
+- Finger on the pager: snap off, native scroll follows the finger; on release, displacement >= 20 % or velocity >= 0.3 px/ms -> next page.
+- Widget updates of newly adjacent pages are deferred to the end of the settle (> 50 ms frames 2–5 -> 0–2).
+- Landscape: numbered page markers (16x11 px, 44x35 px touch box); portrait unchanged.
+Measured: settle 557 ms -> 223 ms.
+
+--- a/android/app/src/main/assets/www/main.js
++++ b/android/app/src/main/assets/www/main.js
+@@ -800,7 +800,8 @@
+ 
+ // ---------------------------------------------------------------- navigation: swipe, dots, overview, volume keys, agent events
+ export function buildDots() {
+-  $('dots').replaceChildren(...pages.map(() => h('i')));
++  // Landscape: the dots are page buttons (small number, large touch box; style.css). Portrait: plain dots, tap = overview.
++  $('dots').replaceChildren(...pages.map((p, i) => { const d = h('i', null, String(i + 1)); d.title = p.title || ''; d.dataset.i = i; return d; }));
+   $('dots').hidden = pages.length < 2;
+ }
+ 
+@@ -809,9 +810,61 @@
+ }
+ 
+ export let snapTimer = 0;
++// The browser's own smooth scroll / snap animation takes 0.5–0.7 s (SWIPE-AND-PAGER.md, TP-SW-01); pages settle in SETTLE_MS.
++const SETTLE_MS = 200;
++export let settling = 0, dragging = false, activePending = false;
++function settle(i) {
++  cancelAnimationFrame(settling);
++  pager.style.scrollSnapType = 'none';
++  pager.style.overflowX = 'hidden';   // stops the browser's fling, so it cannot carry the pager past the page; scrollLeft still works
++  const from = pager.scrollLeft, to = i * window.innerWidth, t0 = performance.now();
++  if (Math.abs(to - from) < 1) { settled(); return; }
++  const step = (t) => {
++    const k = Math.min(1, (t - t0) / SETTLE_MS), e = 1 - (1 - k) ** 3;   // ease-out
++    pager.scrollLeft = from + (to - from) * e;
++    if (k < 1) settling = requestAnimationFrame(step); else settled();
++  };
++  settling = requestAnimationFrame(step);
++}
++function settled() {
++  settling = 0;
++  pager.style.overflowX = '';
++  pager.style.scrollSnapType = '';
++  onScroll();
++  if (activePending) { activePending = false; setActive(); }   // widgets of the new neighbours update after the move, not during it
++}
++// Finger on the pager: the browser scrolls natively (follows the finger, compositor); on release we pick the page and settle.
++let drag = null;
++pager.addEventListener('touchstart', (e) => {
++  if (e.touches.length !== 1) return;
++  cancelAnimationFrame(settling); settling = 0;
++  pager.style.scrollSnapType = 'none';
++  dragging = true;
++  drag = { left: pager.scrollLeft, page: Math.round(pager.scrollLeft / window.innerWidth), x: e.touches[0].clientX, t: performance.now(), vx: 0 };
++}, { passive: true });
++pager.addEventListener('touchmove', (e) => {
++  if (!drag) return;
++  const x = e.touches[0].clientX, t = performance.now();
++  if (t > drag.t) drag.vx = 0.7 * drag.vx + 0.3 * ((x - drag.x) / (t - drag.t));
++  drag.x = x; drag.t = t;
++}, { passive: true });
++const release = () => {
++  if (!drag) return;
++  const d = pager.scrollLeft - drag.page * window.innerWidth, v = drag.vx;
++  let i = drag.page;
++  const moved = Math.abs(pager.scrollLeft - drag.left) >= 2;
++  if (d > window.innerWidth * 0.2 || v < -0.3) i = drag.page + 1;
++  else if (d < -window.innerWidth * 0.2 || v > 0.3) i = drag.page - 1;
++  drag = null; dragging = false;
++  if (!moved) { settled(); return; }   // a tap or a vertical scroll, not a page swipe
++  settle(Math.max(0, Math.min(pages.length - 1, i)));
++};
++pager.addEventListener('touchend', (e) => { if (!e.touches.length) release(); }, { passive: true });
++pager.addEventListener('touchcancel', release, { passive: true });
++
+ export function goPage(i, instant = false) {
+   i = Math.max(0, Math.min(pages.length - 1, i));
+-  if (!instant) { pager.scrollTo({ left: i * window.innerWidth, behavior: 'smooth' }); return; }
++  if (!instant) { settle(i); return; }
+   // scroll-snap-stop: always would stop a programmatic jump at the next page, so snapping is paused for the jump.
+   pager.style.scrollSnapType = 'none';
+   pager.scrollLeft = i * window.innerWidth;
+@@ -1045,7 +1098,7 @@
+   curPage = p;
+   updateDots();
+   flashTitle();
+-  setActive();
++  if (settling || dragging) activePending = true; else setActive();
+   if (sheet) closeSheet();
+   if (pageOf('procs')) loadProcs();
+ }
+@@ -1086,7 +1139,14 @@
+ export function closeOverview() { $('overview').hidden = true; }
+ $('overview').addEventListener('click', closeOverview);
+ $('ovRules').addEventListener('click', (e) => { e.stopPropagation(); toggleRulesPause(); });
+-$('dots').addEventListener('click', openOverview);
++$('dots').addEventListener('click', (e) => {
++  const d = e.target.closest?.('#dots i');
++  if (!d || isPortrait()) { openOverview(); return; }
++  haptic();
++  lastTouch = lastUserTouch = Date.now();
++  const i = +d.dataset.i;
++  if (i !== curPage) goPage(i, Math.abs(i - curPage) > 1);
++});
+ 
+ // Long press on an empty part of a page opens the overview too.
+ export let pressTimer = 0;
+--- a/android/app/src/main/assets/www/style.css
++++ b/android/app/src/main/assets/www/style.css
+@@ -101,6 +101,16 @@
+ }
+ #dots i { width: 6px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.22); transition: width .25s, background .25s; }
+ #dots i.on { width: 16px; background: rgba(255, 255, 255, 0.7); }
++#dots i { font-size: 0; }
++/* Landscape: page buttons — small marks with the page number, touch box ≈ 44 × 36 px; widgets keep their size (the box covers
++   the 17 px bottom padding and the lowest 19 px of the bottom row inside the strip only). SWIPE-AND-PAGER.md TP-PG-01..04 */
++@media (orientation: landscape) {
++  #dots { gap: 0; padding: 0; height: 17px; align-items: center; }
++  #dots i { position: relative; width: 16px; height: 11px; margin: 0 14px; border-radius: 4px; font-size: 8.5px; line-height: 11px;
++    font-weight: 700; text-align: center; color: rgba(255, 255, 255, .55); font-style: normal; }
++  #dots i.on { width: 22px; margin: 0 11px; color: #0b0e12; }
++  #dots i::before { content: ""; position: absolute; left: -14px; right: -14px; top: -21px; bottom: -4px; }
++}
+ 
+ #ptitle {
+   position: fixed; left: 50%; top: 10px; transform: translate(-50%, -8px); z-index: 7;

@@ -1,0 +1,19 @@
+{
+ "endpoint": "/api/info",
+ "status": 200,
+ "content_type": "application/json; charset=utf-8",
+ "bytes": 296,
+ "shape": {
+  "adb": "str",
+  "appMissing": [],
+  "configPath": "str",
+  "connected": "bool",
+  "devices": [
+   "str"
+  ],
+  "logPath": "str",
+  "os": "str",
+  "usbProblem": "NoneType",
+  "version": "str"
+ }
+}

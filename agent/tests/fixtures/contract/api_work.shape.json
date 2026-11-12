@@ -1,0 +1,17 @@
+{
+ "endpoint": "/api/work",
+ "status": 200,
+ "content_type": "application/json; charset=utf-8",
+ "bytes": 240,
+ "shape": {
+  "github": {
+   "error": "str",
+   "myPrs": [],
+   "notifications": "int",
+   "reviewRequests": [],
+   "updatedAt": "NoneType",
+   "user": "NoneType"
+  },
+  "sessions": []
+ }
+}

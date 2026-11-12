@@ -1,0 +1,216 @@
+PhoneBox 0.6.9 — panel: unchanged leaves are not written to the DOM.
+Why: every number, gauge ring (SVG re-inserted), chart title and memory bar was rewritten every second even when unchanged
+(82.9 % of DOM writes were no-ops).
+- setText / setKids / setVar: write only when the displayed text, child key or CSS variable actually changes.
+- Applied to stat, gauge, chart title/value, meters, media, clock, onair.
+Measured: identical state twice -> DOM mutations on the visible page 25 -> 0 (2 when only CPU changes).
+
+diff --git a/android/app/src/main/assets/www/main.js b/android/app/src/main/assets/www/main.js
+index fac3bed..e5a98ce 100644
+--- a/android/app/src/main/assets/www/main.js
++++ b/android/app/src/main/assets/www/main.js
+@@ -98,6 +98,12 @@ export function h(tag, cls, ...kids) {
+   return e;
+ }
+ 
++/** Write only what changed: an unchanged value is not written into the DOM again, so the WebView has nothing to restyle or
++ * repaint for it (L5; W3-PANEL.md TP-W3-05). setKids rebuilds children only when their key (the shown text) changed. */
++export function setText(el, v) { v = v == null ? '' : String(v); if (el.textContent !== v) el.textContent = v; }
++export function setKids(el, key, make) { if (el._kids === key) return; el._kids = key; el.replaceChildren(...make()); }
++export function setVar(el, name, v) { if (el.style.getPropertyValue(name) !== v) el.style.setProperty(name, v); }
++
+ export const pad = (n) => String(n).padStart(2, '0');
+ export const fmtTime = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return Math.floor(s / 60) + ':' + pad(s % 60); };
+ export function fmtRate(bps) {
+diff --git a/android/app/src/main/assets/www/widgets/basic.js b/android/app/src/main/assets/www/widgets/basic.js
+index c092e92..6af8eb2 100644
+--- a/android/app/src/main/assets/www/widgets/basic.js
++++ b/android/app/src/main/assets/www/widgets/basic.js
+@@ -1,4 +1,4 @@
+-import { $, API, D, armFast, histSeq, LEVEL_COLOR, LOCALE, MEDIA_HTML, METRICS, Q_STYLE, S_ORDER, ago, api, averageColor, buzz, cfg, chart, color, cssVar, emit, fillIcon, fmtDur, fmtMem, fmtReset, fmtTime, fmtValue, h, haptic, hist, keyButton, levelOf, media, metricText, online, openSheet, paceInfo, pad, prRow, pushView, quotaProviders, r1, renderStatus, ringSvg, setArtColor, setVolDragging, shortDur, store, tick, toast, volDragging, wxBlock, wxIcon } from '../main.js';
++import { $, API, D, armFast, histSeq, setKids, setText, setVar, LEVEL_COLOR, LOCALE, MEDIA_HTML, METRICS, Q_STYLE, S_ORDER, ago, api, averageColor, buzz, cfg, chart, color, cssVar, emit, fillIcon, fmtDur, fmtMem, fmtReset, fmtTime, fmtValue, h, haptic, hist, keyButton, levelOf, media, metricText, online, openSheet, paceInfo, pad, prRow, pushView, quotaProviders, r1, renderStatus, ringSvg, setArtColor, setVolDragging, shortDur, store, tick, toast, volDragging, wxBlock, wxIcon } from '../main.js';
+ import { W } from '../registry.js';
+ 
+ // ================================================================= widgets
+@@ -18,11 +18,11 @@ W.clock = {
+       update(kind) {
+         if (kind === 'tick') {
+           const now = new Date();
+-          hh.textContent = pad(now.getHours());
+-          mm.textContent = pad(now.getMinutes());
+-          ss.textContent = cfg.display?.showSeconds === false ? '' : pad(now.getSeconds());
++          setText(hh, pad(now.getHours()));
++          setText(mm, pad(now.getMinutes()));
++          setText(ss, cfg.display?.showSeconds === false ? '' : pad(now.getSeconds()));
+           colon.classList.toggle('dim', now.getSeconds() % 2 === 1);   // was a CSS blink running every frame
+-          if (date) date.textContent = now.toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' });
++          if (date) setText(date, now.toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' }));
+           if (status && now.getSeconds() % 30 === 0) renderStatus(status); // battery
+         } else if (kind === 'weather') wx?.update();
+         else if (status) renderStatus(status);
+@@ -112,7 +112,7 @@ W.media = {
+       media.posMs = ms; media.at = performance.now();
+       try { await api('/media/seek?ms=' + ms, 'POST'); } catch (_) {}
+     });
+-    const paintVol = (v) => { vol.style.setProperty('--p', v + '%'); q('.vol-val').textContent = v; };
++    const paintVol = (v) => { setVar(vol, '--p', v + '%'); setText(q('.vol-val'), v); };
+     vol.addEventListener('input', () => {
+       setVolDragging(true);
+       paintVol(vol.value);
+@@ -132,30 +132,30 @@ W.media = {
+           if (!media || !(media.durMs > 0)) return;
+           const pos = Math.min(media.durMs, media.posMs + (media.playing ? performance.now() - media.at : 0));
+           q('.fill').style.width = (pos / media.durMs) * 100 + '%';
+-          q('.m-pos').textContent = fmtTime(pos);
++          setText(q('.m-pos'), fmtTime(pos));
+           return;
+         }
+         const m = D.state?.media, a = D.state?.audio;
+         if (a) {
+           box.classList.toggle('muted-on', !!a.muted);
+-          if (!volDragging) { vol.value = a.volume; paintVol(a.volume); }
++          if (!volDragging) { if (vol.value !== String(a.volume)) vol.value = a.volume; paintVol(a.volume); }
+         }
+         box.classList.toggle('idle', !m);
+         if (!m) {
+           box.classList.remove('playing');
+-          q('.m-app').textContent = 'Media';
+-          q('.m-title').textContent = 'Nothing playing';
+-          q('.m-artist').textContent = 'Press ▶ to resume';
+-          q('.fill').style.width = '0';
+-          q('.m-pos').textContent = q('.m-dur').textContent = '0:00';
++          setText(q('.m-app'), 'Media');
++          setText(q('.m-title'), 'Nothing playing');
++          setText(q('.m-artist'), 'Press ▶ to resume');
++          if (q('.fill').style.width !== '0px') q('.fill').style.width = '0';
++          setText(q('.m-pos'), '0:00'); setText(q('.m-dur'), '0:00');
+           if (artId !== 0) { artId = 0; img.classList.remove('on'); setArtColor(null); }
+           return;
+         }
+         box.classList.toggle('playing', m.playing);
+-        q('.m-app').textContent = m.app || 'Media';
+-        q('.m-title').textContent = m.title || 'Unknown track';
+-        q('.m-artist').textContent = [m.artist, m.album].filter(Boolean).join(' · ') || '—';
+-        q('.m-dur').textContent = fmtTime(m.durMs);
++        setText(q('.m-app'), m.app || 'Media');
++        setText(q('.m-title'), m.title || 'Unknown track');
++        setText(q('.m-artist'), [m.artist, m.album].filter(Boolean).join(' · ') || '—');
++        setText(q('.m-dur'), fmtTime(m.durMs));
+         if (m.artId !== artId) {
+           artId = m.artId;
+           if (m.artId) img.src = `${API}/art?id=${m.artId}`;
+@@ -181,9 +181,9 @@ W.stat = {
+         if (!s) return;
+         if (kind !== 'hist') {
+           const [v, u] = metricText(m, s);
+-          val.textContent = v;
+-          unit.textContent = u;
+-          sub.textContent = m.sub?.(s) || ' ';
++          setText(val, v);
++          setText(unit, u);
++          setText(sub, m.sub?.(s) || ' ');
+         }
+         if (kind !== 'state') chart(canvas, [{ data: hist[m.hist || o.metric] || hist.cpu, color: c, max: m.max(s) }], { seq: histSeq });
+       },
+@@ -199,7 +199,7 @@ W.gauge = {
+     const dial = h('div', 'g-dial'), pct = h('div', 'g-val'), sub = h('div', 'g-sub');
+     box.append(dial, h('div', 'g-label', m.label), sub);
+     dial.append(pct);
+-    let svg = null;
++    let svg = null, ring = '';
+     return {
+       update() {
+         const s = D.state;
+@@ -207,13 +207,17 @@ W.gauge = {
+         const raw = m.pct ? m.pct(s) : m.val(s);
+         const p = raw == null ? 0 : (raw / (m.pct ? 100 : m.max(s))) * 100;
+         const warn = o.metric.includes('temp') ? (raw > 85 ? '#ef4444' : raw > 75 ? '#f59e0b' : '') : (p >= 95 ? '#ef4444' : p >= 85 ? '#f59e0b' : '');
+-        dial.style.setProperty('--qc', warn || 'var(--q)');
+-        if (svg) svg.remove();
+-        dial.insertAdjacentHTML('afterbegin', ringSvg(p));
+-        svg = dial.firstElementChild;
++        setVar(dial, '--qc', warn || 'var(--q)');
++        const r = ringSvg(p);
++        if (r !== ring) {   // the ring is redrawn only when its arc moved
++          ring = r;
++          if (svg) svg.remove();
++          dial.insertAdjacentHTML('afterbegin', r);
++          svg = dial.firstElementChild;
++        }
+         const [v, u] = metricText(m, s);
+-        pct.replaceChildren(v, h('small', null, u));
+-        sub.textContent = m.sub?.(s) || '';
++        setKids(pct, v + '\u0000' + u, () => [v, h('small', null, u)]);
++        setText(sub, m.sub?.(s) || '');
+       },
+     };
+   },
+@@ -240,18 +244,18 @@ W.chart = {
+           return;
+         }
+         if (single) {
+-          const [v, u] = metricText(single, s);
+-          main.replaceChildren(h('b', null, v), h('small', null, u), h('span', 'chips', single.sub?.(s) ? h('span', 'chip', single.sub(s)) : ''));
+-          head.lastChild.textContent = single.title?.(s) || '';
++          const [v, u] = metricText(single, s), chip = single.sub?.(s);
++          setKids(main, JSON.stringify([v, u, chip]), () => [h('b', null, v), h('small', null, u), h('span', 'chips', chip ? h('span', 'chip', chip) : '')]);
++          setText(head.lastChild, single.title?.(s) || '');
+         } else {
+-          main.replaceChildren(...keys.map((k) => {
++          const txt = keys.map((k) => metricText(METRICS[k], s).join(' '));
++          setKids(main, JSON.stringify(txt), () => keys.map((k, i) => {
+             const mm = METRICS[k];
+-            const [v, u] = metricText(mm, s);
+-            const e = h('span', 'multi', (k === 'down' ? '↓ ' : k === 'up' ? '↑ ' : mm.label + ' '), h('b', null, v + ' ' + u));
++            const e = h('span', 'multi', (k === 'down' ? '↓ ' : k === 'up' ? '↑ ' : mm.label + ' '), h('b', null, txt[i]));
+             e.style.color = color(mm.color);
+             return e;
+           }));
+-          head.lastChild.textContent = isNet && s.ping ? `Ping ${s.ping.ms != null ? Math.round(s.ping.ms) + ' ms' : '—'} · loss ${s.ping.lossPct}%` : '';
++          setText(head.lastChild, isNet && s.ping ? `Ping ${s.ping.ms != null ? Math.round(s.ping.ms) + ' ms' : '—'} · loss ${s.ping.lossPct}%` : '');
+         }
+       },
+     };
+@@ -276,12 +280,15 @@ W.meters = {
+         const pc = D.state?.pc;
+         if (!pc) return;
+         const s = pc.uptimeSec, d = Math.floor(s / 86400), hr = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+-        up.textContent = 'Up ' + (d ? `${d} d ${hr} h` : hr ? `${hr} h ${m} min` : `${m} min`);
+-        const rows = [meter('RAM', `${r1(pc.ramUsedGb)} / ${Math.round(pc.ramTotalGb)} GB`, (pc.ramUsedGb / pc.ramTotalGb) * 100)];
++        setText(up, 'Up ' + (d ? `${d} d ${hr} h` : hr ? `${hr} h ${m} min` : `${m} min`));
++        // rows as data first; the DOM is rebuilt only when a shown text or bar length (0.1 %) changed
++        const rows = [['RAM', `${r1(pc.ramUsedGb)} / ${Math.round(pc.ramTotalGb)} GB`, (pc.ramUsedGb / pc.ramTotalGb) * 100, null]];
+         const g = pc.gpu;
+-        if (g && g.vramTotal) rows.push(meter('VRAM', `${r1(g.vramUsed)} / ${Math.round(g.vramTotal)} GB`, (g.vramUsed / g.vramTotal) * 100, cssVar('--gpu')));
+-        const disks = h('div', 'disks', ...(pc.disks || []).map((dk) => meter(dk.name, Math.round((dk.usedGb / dk.totalGb) * 100) + '%', (dk.usedGb / dk.totalGb) * 100, '#94a3b8')));
+-        list.replaceChildren(...rows, disks);
++        if (g && g.vramTotal) rows.push(['VRAM', `${r1(g.vramUsed)} / ${Math.round(g.vramTotal)} GB`, (g.vramUsed / g.vramTotal) * 100, '--gpu']);
++        const dks = (pc.disks || []).map((dk) => [dk.name, Math.round((dk.usedGb / dk.totalGb) * 100) + '%', (dk.usedGb / dk.totalGb) * 100, '#94a3b8']);
++        const key = JSON.stringify([...rows, ...dks].map((r) => [r[0], r[1], Math.round(r[2] * 10)]));
++        setKids(list, key, () => [...rows.map((r) => meter(r[0], r[1], r[2], r[3] && cssVar(r[3]))),
++          h('div', 'disks', ...dks.map((r) => meter(...r)))]);
+       },
+     };
+   },
+diff --git a/android/app/src/main/assets/www/widgets/pc.js b/android/app/src/main/assets/www/widgets/pc.js
+index 2cc8e13..33dd82b 100644
+--- a/android/app/src/main/assets/www/widgets/pc.js
++++ b/android/app/src/main/assets/www/widgets/pc.js
+@@ -1,4 +1,4 @@
+-import { $, API, D, PANEL_HEADERS, LOCALE, Q_STYLE, api, bridge, cfg, color, rulesPaused, toggleRulesPause, fillIcon, fmtDur, fmtMem, gotoPageRef, h, haptic, openSheet, paceInfo, pad, quotaProviders, store, tick, toast } from '../main.js';
++import { $, API, D, setText, PANEL_HEADERS, LOCALE, Q_STYLE, api, bridge, cfg, color, rulesPaused, toggleRulesPause, fillIcon, fmtDur, fmtMem, gotoPageRef, h, haptic, openSheet, paceInfo, pad, quotaProviders, store, tick, toast } from '../main.js';
+ import { W } from '../registry.js';
+ import { canKillAnywhere, dialEl, every } from './helpers.js';
+ 
+@@ -349,9 +349,9 @@ W.onair = {
+         const on = mic || cam || obsLive || pushed;
+         box.classList.toggle('on', on);
+         const apps = [...new Set([...(mic ? p.micApps || [] : []), ...(cam ? p.cameraApps || [] : [])])];
+-        sub.textContent = on
++        setText(sub, on
+           ? [mic ? '🎙️' : '', cam ? '📷' : '', obsLive ? (obs.streaming ? 'OBS live' : 'OBS recording') : '', apps.join(', ') || (pushed && typeof pv === 'string' ? pv : '')].filter(Boolean).join(' ')
+-          : (src === 'mic' || src === 'camera') && p && p.mic == null ? 'Not detectable on this computer' : 'Off air';
++          : (src === 'mic' || src === 'camera') && p && p.mic == null ? 'Not detectable on this computer' : 'Off air');
+       },
+     };
+   },

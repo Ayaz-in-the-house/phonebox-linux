@@ -1,0 +1,19 @@
+{
+ "endpoint": "/api/charge",
+ "status": 200,
+ "content_type": "application/json; charset=utf-8",
+ "bytes": 160,
+ "shape": {
+  "error": "NoneType",
+  "phone": {
+   "at": "int",
+   "level": "int",
+   "plugged": "bool",
+   "source": "str",
+   "temp": "float",
+   "usb": "str"
+  },
+  "power": "NoneType",
+  "switchedAt": "NoneType"
+ }
+}

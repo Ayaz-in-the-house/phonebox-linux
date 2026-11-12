@@ -1,0 +1,133 @@
+PhoneBox 0.6.9 — panel: media widget with a YouTube client and unknown position.
+Why (measured): Firefox MPRIS sends mpris:length / Position only while a position state exists; the same video sent Metadata 8 times
+without a length in 16 s -> the panel showed 0:00 / 0:00.
+- posKnown === false: no fast clock, position '—:—', no thumb. Position text and bar painted from one place.
+- ±10 s buttons (only when canSeek), queue / next / ad fields when the agent provides them; POST /api/media/skip?ms=±N.
+
+diff --git a/android/app/src/main/assets/www/main.js b/android/app/src/main/assets/www/main.js
+index 005978f..914963c 100644
+--- a/android/app/src/main/assets/www/main.js
++++ b/android/app/src/main/assets/www/main.js
+@@ -423,12 +423,15 @@ export const MEDIA_HTML = `
+     <div class="m-text"><div class="m-app">Media</div><div class="m-title">Nothing playing</div><div class="m-artist">Start something on the PC</div></div>
+   </div>
+   <div class="m-progress"><div class="bar"><div class="fill"></div></div><div class="times"><span class="m-pos">0:00</span><span class="m-dur">0:00</span></div></div>
++  <div class="m-next"><img class="next-art" alt=""><span class="m-next-t"></span><span class="m-q"></span></div>
+   <div class="m-controls">
+     <button class="ic" data-media="prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9.5 12z"/></svg></button>
++    <button class="ic sm skip" data-media="skip" data-ms="-10000" aria-label="Back 10 seconds"><svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/></svg></button>
+     <button class="ic play" data-media="playpause" aria-label="Play/Pause">
+       <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+       <svg class="i-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+     </button>
++    <button class="ic sm skip" data-media="skip" data-ms="10000" aria-label="Forward 10 seconds"><svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8z"/></svg></button>
+     <button class="ic" data-media="next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l10.5-7z"/></svg></button>
+     <div class="vol">
+       <button class="ic sm mute" aria-label="Mute">
+diff --git a/android/app/src/main/assets/www/style.css b/android/app/src/main/assets/www/style.css
+index 0b18d23..946e04b 100644
+--- a/android/app/src/main/assets/www/style.css
++++ b/android/app/src/main/assets/www/style.css
+@@ -271,6 +271,16 @@ body.night #navCard, body.night #navChip { display: none; }
+ .bar::before { content: ""; position: absolute; left: 0; right: 0; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .12); }
+ .fill { position: relative; height: 4px; border-radius: 2px; background: var(--text); width: 0; }
+ .fill::after { content: ""; position: absolute; right: -5px; top: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--text); }
++/* 0011: ±10 s only when the source can seek; position unknown → no thumb; "Up next" row only for YouTube (deckd Zen extension). */
++.w-media .skip { display: none; }
++.w-media.seekable .skip { display: grid; }
++.w-media.pos-unknown .fill::after { display: none; }
++.m-next { display: none; align-items: center; gap: 6px; min-width: 0; font-size: 11px; color: var(--muted); }
++.w-media.has-next .m-next { display: flex; }
++.m-next .next-art { width: 32px; height: 18px; border-radius: 3px; object-fit: cover; opacity: 0; flex: 0 0 auto; }
++.m-next .next-art.on { opacity: 1; }
++.m-next-t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
++.m-q { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+ .times { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin-top: -1px; }
+ .m-controls { display: flex; align-items: center; gap: 4px; }
+ .ic { width: 44px; height: 44px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; transition: transform .12s, background .2s; }
+diff --git a/android/app/src/main/assets/www/widgets/basic.js b/android/app/src/main/assets/www/widgets/basic.js
+index 011e328..7a2c7be 100644
+--- a/android/app/src/main/assets/www/widgets/basic.js
++++ b/android/app/src/main/assets/www/widgets/basic.js
+@@ -102,14 +102,41 @@ W.media = {
+         box.classList.toggle('playing', media.playing);
+         armFast();
+       }
++      if (action === 'skip') {
++        // ±10 s (0011): YouTube → deckd Zen extension, MPRIS → Seek. Optimistic, clamped; the next state corrects it.
++        const d = +btn.dataset.ms;
++        if (media && media.posKnown !== false && media.durMs > 0) {
++          const pos = media.posMs + (media.playing ? performance.now() - media.at : 0);
++          media.posMs = Math.max(0, Math.min(media.durMs, pos + d)); media.at = performance.now();
++          paintPos();
++        }
++        try { await api('/media/skip?ms=' + d, 'POST'); } catch (_) {}
++        return;
++      }
+       try { await api('/media/' + action, 'POST'); } catch (_) {}
+     }));
++    // Position text + bar from one place (0011): the fast tick, a state update and ±10 s / bar seek all paint through it, so a
++    // paused player (no fast tick) still shows its real position, and an unknown one shows "—:—" instead of counting from 0:00.
++    const paintPos = () => {
++      const fill = q('.fill');
++      if (!media || media.posKnown === false || !(media.durMs > 0)) {
++        setText(q('.m-pos'), '—:—'); if (fill.style.width !== '0px') fill.style.width = '0';
++        return;
++      }
++      const pos = Math.min(media.durMs, media.posMs + (media.playing ? performance.now() - media.at : 0));
++      fill.style.width = (pos / media.durMs) * 100 + '%';
++      setText(q('.m-pos'), fmtTime(pos));
++    };
++    const nextArt = q('.next-art');
++    let nextArtId = -1;
++    nextArt.addEventListener('load', () => nextArt.classList.add('on'));
++    nextArt.addEventListener('error', () => nextArt.classList.remove('on'));
+     q('.bar').addEventListener('click', async (e) => {
+       if (!media || !media.durMs || !media.canSeek) return;
+       const r = e.currentTarget.getBoundingClientRect();
+       const ms = Math.round(((e.clientX - r.left) / r.width) * media.durMs);
+       haptic();
+-      media.posMs = ms; media.at = performance.now();
++      media.posMs = ms; media.at = performance.now(); paintPos();
+       try { await api('/media/seek?ms=' + ms, 'POST'); } catch (_) {}
+     });
+     const paintVol = (v) => { setVar(vol, '--p', v + '%'); setText(q('.vol-val'), v); };
+@@ -140,13 +167,11 @@ W.media = {
+     });
+ 
+     return {
+-      fastWanted: () => !!media && media.playing && media.durMs > 0,
++      // posKnown === false (0011): the player gives no real position (Firefox/Zen without a position state) — never count from 0:00.
++      fastWanted: () => !!media && media.playing && media.durMs > 0 && media.posKnown !== false,
+       update(kind) {
+         if (kind === 'fast') {
+-          if (!media || !(media.durMs > 0)) return;
+-          const pos = Math.min(media.durMs, media.posMs + (media.playing ? performance.now() - media.at : 0));
+-          q('.fill').style.width = (pos / media.durMs) * 100 + '%';
+-          setText(q('.m-pos'), fmtTime(pos));
++          if (media) paintPos();
+           return;
+         }
+         const m = D.state?.media, a = D.state?.audio;
+@@ -166,10 +191,19 @@ W.media = {
+           return;
+         }
+         box.classList.toggle('playing', m.playing);
+-        setText(q('.m-app'), m.app || 'Media');
++        box.classList.toggle('pos-unknown', m.posKnown === false || !(m.durMs > 0));
++        box.classList.toggle('seekable', !!m.canSeek);
++        paintPos();
++        // Up next + playlist position (source "yt", 0011): hidden for MPRIS players.
++        box.classList.toggle('has-next', !!m.next);
++        setText(q('.m-next-t'), m.next ? 'Up next · ' + (m.next.title || '—') : '');
++        setText(q('.m-q'), m.queueLen ? `${(m.queueIndex ?? -1) + 1}/${m.queueLen}` : '');
++        const na = m.next?.artId || 0;
++        if (na !== nextArtId) { nextArtId = na; if (na) nextArt.src = `${API}/art?id=${na}`; else nextArt.classList.remove('on'); }
++        setText(q('.m-app'), m.ad ? (m.app || 'Media') + ' · Ad' : (m.app || 'Media'));
+         setText(q('.m-title'), m.title || 'Unknown track');
+         setText(q('.m-artist'), [m.artist, m.album].filter(Boolean).join(' · ') || '—');
+-        setText(q('.m-dur'), fmtTime(m.durMs));
++        setText(q('.m-dur'), m.durMs > 0 ? fmtTime(m.durMs) : '—:—');
+         if (m.artId !== artId) {
+           artId = m.artId;
+           if (m.artId) img.src = `${API}/art?id=${m.artId}`;

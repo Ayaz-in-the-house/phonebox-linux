@@ -1,0 +1,242 @@
+PhoneBox 0.6.9 — native shell: microphone permission for dictation (android/ only).
+- Manifest: RECORD_AUDIO (no other new permission).
+- WebChromeClient.onPermissionRequest: grant ONLY RESOURCE_AUDIO_CAPTURE and ONLY for https://appassets.androidplatform.net;
+  every other resource / origin / sandboxed iframe -> deny(). Runtime permission is requested on the first dictation press, not at start.
+- POST bodies: shouldInterceptRequest never exposes the request body, so the /agent/ proxy forwarded POSTs with 0 bytes. The panel now
+  stages the body through the JS bridge (max 2 pending, <= 2 MB + 64 KiB) and the proxy attaches it.
+
+diff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/AndroidManifest.xml
+index 3ae5ff5..d00df17 100644
+--- a/android/app/src/main/AndroidManifest.xml
++++ b/android/app/src/main/AndroidManifest.xml
+@@ -3,6 +3,8 @@
+ 
+     <uses-permission android:name="android.permission.INTERNET" />
+     <uses-permission android:name="android.permission.VIBRATE" />
++    <!-- Dictation (patch 0012): asked at the first press of the dictate button, only for the panel's own origin. -->
++    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+ 
+     <application
+         android:icon="@mipmap/ic_launcher"
+diff --git a/android/app/src/main/java/net/oxog/phonebox/deskpanel/AgentLink.kt b/android/app/src/main/java/net/oxog/phonebox/deskpanel/AgentLink.kt
+index 035a206..f029295 100644
+--- a/android/app/src/main/java/net/oxog/phonebox/deskpanel/AgentLink.kt
++++ b/android/app/src/main/java/net/oxog/phonebox/deskpanel/AgentLink.kt
+@@ -115,14 +115,18 @@ class AgentLink(context: Context) {
+         return null
+     }
+ 
+-    /** Forwards a request (method + path with query) to the agent over the best available route. */
+-    fun request(method: String, pathAndQuery: String): Reply {
+-        usb(method, pathAndQuery)?.let {
++    /**
++     * Forwards a request (method + path with query) to the agent over the best available route. [body] is sent as is
++     * (dictation audio, patch 0012); without it a POST carries an empty body, as before.
++     */
++    fun request(method: String, pathAndQuery: String, body: ByteArray? = null, contentType: String? = null,
++                readTimeout: Int = 4000): Reply {
++        usb(method, pathAndQuery, readTimeout, body, contentType)?.let {
+             route = Route.USB
+             maybePair()
+             return it
+         }
+-        wifi(method, pathAndQuery)?.let {
++        wifi(method, pathAndQuery, readTimeout, body, contentType)?.let {
+             route = Route.WIFI
+             return it
+         }
+@@ -130,15 +134,17 @@ class AgentLink(context: Context) {
+         return Reply(503, "application/json", ByteArrayInputStream("""{"error":"offline"}""".toByteArray()))
+     }
+ 
+-    private fun usb(method: String, pathAndQuery: String, readTimeout: Int = 4000): Reply? = try {
++    private fun usb(method: String, pathAndQuery: String, readTimeout: Int = 4000, body: ByteArray? = null,
++                    contentType: String? = null): Reply? = try {
+         val c = URL("$USB_BASE$pathAndQuery").openConnection() as HttpURLConnection
+         c.connectTimeout = 400 // refused instantly when no adb reverse tunnel exists
+-        send(c, method, readTimeout)
++        send(c, method, readTimeout, body, contentType)
+     } catch (e: Exception) {
+         null
+     }
+ 
+-    private fun wifi(method: String, pathAndQuery: String, readTimeout: Int = 4000): Reply? {
++    private fun wifi(method: String, pathAndQuery: String, readTimeout: Int = 4000, body: ByteArray? = null,
++                     contentType: String? = null): Reply? {
+         val pc = activePc() ?: return null
+         val hosts = pc.hosts
+         val token = pc.token
+@@ -156,7 +162,7 @@ class AgentLink(context: Context) {
+                 c.hostnameVerifier = javax.net.ssl.HostnameVerifier { _, _ -> true } // identity is the pinned certificate
+                 c.connectTimeout = 1500
+                 c.setRequestProperty("Authorization", "Bearer $token")
+-                val r = send(c, method, readTimeout)
++                val r = send(c, method, readTimeout, body, contentType)
+                 preferredHost = i
+                 return r
+             } catch (e: Exception) {
+@@ -166,7 +172,8 @@ class AgentLink(context: Context) {
+         return null
+     }
+ 
+-    private fun send(c: HttpURLConnection, method: String, readTimeout: Int = 4000): Reply {
++    private fun send(c: HttpURLConnection, method: String, readTimeout: Int = 4000, body: ByteArray? = null,
++                     contentType: String? = null): Reply {
+         c.requestMethod = method
+         c.setRequestProperty("X-PhoneBox-App", appVersion) // lets the agent offer updates
+         c.setRequestProperty("X-PhoneBox-Device", deviceId)
+@@ -175,8 +182,9 @@ class AgentLink(context: Context) {
+         c.useCaches = false
+         if (method == "POST") {
+             c.doOutput = true
+-            c.setFixedLengthStreamingMode(0)
+-            c.outputStream.close()
++            contentType?.let { c.setRequestProperty("Content-Type", it) }
++            c.setFixedLengthStreamingMode(body?.size ?: 0)
++            body?.let { b -> c.outputStream.use { it.write(b) } } ?: c.outputStream.close()
+         }
+         val code = c.responseCode
+         val body = (if (code >= 400) c.errorStream else c.inputStream) ?: ByteArrayInputStream(ByteArray(0))
+diff --git a/android/app/src/main/java/net/oxog/phonebox/deskpanel/MainActivity.kt b/android/app/src/main/java/net/oxog/phonebox/deskpanel/MainActivity.kt
+index 9252f74..dce22b6 100644
+--- a/android/app/src/main/java/net/oxog/phonebox/deskpanel/MainActivity.kt
++++ b/android/app/src/main/java/net/oxog/phonebox/deskpanel/MainActivity.kt
+@@ -1,5 +1,6 @@
+ package net.oxog.phonebox.deskpanel
+ 
++import android.Manifest
+ import android.annotation.SuppressLint
+ import android.app.Activity
+ import android.app.ActivityManager
+@@ -22,6 +23,8 @@ import android.view.WindowInsets
+ import android.view.WindowInsetsController
+ import android.view.WindowManager
+ import android.webkit.JavascriptInterface
++import android.webkit.PermissionRequest
++import android.webkit.WebChromeClient
+ import android.webkit.WebResourceRequest
+ import android.webkit.WebResourceResponse
+ import android.webkit.WebSettings
+@@ -31,6 +34,7 @@ import androidx.webkit.WebViewAssetLoader
+ import androidx.webkit.WebViewCompat
+ import androidx.webkit.WebViewFeature
+ import org.json.JSONObject
++import java.util.concurrent.ConcurrentHashMap
+ 
+ /**
+  * Full-screen desk panel. The UI is plain HTML/JS bundled in assets/www.
+@@ -48,6 +52,13 @@ class MainActivity : Activity(), SensorEventListener {
+     private var lastLux = -1f
+     private var lastLuxAt = 0L
+     private var near: Boolean? = null
++    /** The page's microphone request while Android asks the user (first dictation only); answered in onRequestPermissionsResult. */
++    private var pendingMic: PermissionRequest? = null
++    /**
++     * Request bodies handed over by the panel (dictation audio): shouldInterceptRequest never sees a request's body, so the
++     * panel stages it here through the bridge and names it in the BODY_HEADER of its request. Each one is used once.
++     */
++    private val staged = ConcurrentHashMap<String, ByteArray>()
+ 
+     private val assetLoader by lazy {
+         WebViewAssetLoader.Builder()
+@@ -94,6 +105,22 @@ class MainActivity : Activity(), SensorEventListener {
+             override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) = giveKey(view, url)
+             override fun onPageFinished(view: WebView, url: String?) = giveKey(view, url)
+         }
++        // Dictation (patch 0012): the microphone, and nothing else, for the panel's own origin only. Android's permission is
++        // asked at the first press of the dictate button (getUserMedia lands here), not at start-up.
++        web.webChromeClient = object : WebChromeClient() {
++            override fun onPermissionRequest(request: PermissionRequest) {
++                val want = micGrant(request.origin?.scheme, request.origin?.host, request.origin?.port ?: 0, request.resources)
++                if (want == null) { request.deny(); return }
++                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) { request.grant(want); return }
++                pendingMic?.deny()
++                pendingMic = request
++                requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)
++            }
++
++            override fun onPermissionRequestCanceled(request: PermissionRequest) {
++                if (pendingMic === request) pendingMic = null
++            }
++        }
+         if (documentStartKey)
+             WebViewCompat.addDocumentStartJavaScript(web, "window.__phoneboxKey='$bridgeKey';", setOf("https://$ASSET_HOST"))
+         web.addJavascriptInterface(Bridge(), "Android")
+@@ -117,12 +144,30 @@ class MainActivity : Activity(), SensorEventListener {
+     private fun proxy(req: WebResourceRequest): WebResourceResponse {
+         val path = req.url.encodedPath!!.removePrefix("/agent")
+         val query = req.url.encodedQuery?.let { "?$it" } ?: ""
+-        val r = link.request(req.method, path + query)
++        val bodyId = header(req, BODY_HEADER)
++        val body = bodyId?.let { staged.remove(it) }
++        // A request that names a staged body is never sent without it (an empty dictation must not reach the agent).
++        if (bodyId != null && body == null)
++            return WebResourceResponse("application/json", "utf-8", 400, "Error", NO_STORE,
++                java.io.ByteArrayInputStream("""{"error":"no staged body"}""".toByteArray()))
++        val r = if (body == null) link.request(req.method, path + query)
++            else link.request(req.method, path + query, body, header(req, "Content-Type"), BODY_READ_TIMEOUT)
+         val ct = r.contentType ?: "application/octet-stream"
+         val mime = ct.substringBefore(';').trim()
+         val charset = if (ct.contains("charset=")) ct.substringAfter("charset=").trim() else null
+         return WebResourceResponse(mime, charset, r.code, if (r.code < 400) "OK" else "Error", NO_STORE, r.body)
+     }
++    private fun header(req: WebResourceRequest, name: String): String? =
++        req.requestHeaders.entries.firstOrNull { it.key.equals(name, ignoreCase = true) }?.value
++
++    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
++        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
++        if (requestCode != REQ_MIC) return
++        val r = pendingMic ?: return
++        pendingMic = null
++        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) r.grant(MIC_ONLY) else r.deny()
++    }
++
+     override fun onWindowFocusChanged(hasFocus: Boolean) {
+         super.onWindowFocusChanged(hasFocus)
+         if (hasFocus) hideSystemUi()
+@@ -342,6 +387,21 @@ class MainActivity : Activity(), SensorEventListener {
+                 packageManager.setComponentEnabledSetting(alias, want, PackageManager.DONT_KILL_APP)
+         }
+ 
++        /**
++         * Stages a request body (base64) for the panel's next "/agent/" request that names the returned id in BODY_HEADER
++         * (see proxy). At most MAX_STAGED bodies of MAX_BODY bytes wait; "" = refused.
++         */
++        @JavascriptInterface
++        fun stageBody(key: String, base64: String): String {
++            if (!ok(key)) return ""
++            if (staged.size >= MAX_STAGED || base64.length > MAX_BODY / 3 * 4 + 4) return ""
++            val bytes = try { android.util.Base64.decode(base64, android.util.Base64.NO_WRAP) } catch (_: IllegalArgumentException) { return "" }
++            if (bytes.isEmpty() || bytes.size > MAX_BODY) return ""
++            val id = java.util.UUID.randomUUID().toString()
++            staged[id] = bytes
++            return id
++        }
++
+         @JavascriptInterface
+         fun version(key: String): String = if (ok(key)) packageManager.getPackageInfo(packageName, 0).versionName ?: "" else ""
+     }
+@@ -351,6 +411,23 @@ class MainActivity : Activity(), SensorEventListener {
+         private val NO_STORE = mapOf("Cache-Control" to "no-store")
+         private const val PANEL_HEADER = "X-PhoneBox-Panel"
+         private val READ_ONLY_IMAGES = setOf("/agent/api/art", "/agent/api/procs/icon")
++        private const val BODY_HEADER = "X-PhoneBox-Body"
++        /** phoned refuses dictation bodies above 2 MB (TP-DT-03); a little room for the WAV header. */
++        private const val MAX_BODY = 2 * 1024 * 1024 + 64 * 1024
++        private const val MAX_STAGED = 2
++        /** Speech to text on the PC takes a few hundred ms; a long sentence on a cold engine longer. */
++        private const val BODY_READ_TIMEOUT = 20_000
++        private const val REQ_MIC = 7301
++        private val MIC_ONLY = arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE)
++
++        /**
++         * The resources the page may have: the microphone only, and only for the panel's own origin (default https port).
++         * Anything else (camera, protected media, MIDI, another origin, a sandboxed frame's opaque origin) → null = deny.
++         */
++        fun micGrant(scheme: String?, host: String?, port: Int, resources: Array<String>): Array<String>? =
++            if (scheme == "https" && host == ASSET_HOST && port == -1 && resources.isNotEmpty() &&
++                resources.all { it == PermissionRequest.RESOURCE_AUDIO_CAPTURE }) MIC_ONLY else null
++
+         private fun FORBIDDEN() = WebResourceResponse("text/plain", "utf-8", 403, "Forbidden", NO_STORE, java.io.ByteArrayInputStream(ByteArray(0)))
+     }
+ }

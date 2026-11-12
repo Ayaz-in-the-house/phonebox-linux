@@ -1,0 +1,99 @@
+PhoneBox 0.6.9 — panel: 250 ms fast tick only when something needs it.
+Why: setInterval(emit('fast'), 250) ran 4x per second whatever was on screen.
+- armFast(): one-shot 250 ms tick only if a visible widget asks for 'fast' and its fastWanted() is true; re-armed after each update.
+- media: fastWanted = playing and duration > 0 · stopwatch: fastWanted = running. Widgets without fastWanted keep the old behaviour.
+Measured (10 s): paused media 40 -> 0 ticks · playing media (negative control) 40 -> 40, progress bar still moves.
+
+diff --git a/android/app/src/main/assets/www/main.js b/android/app/src/main/assets/www/main.js
+index 77e65d3..7c781fc 100644
+--- a/android/app/src/main/assets/www/main.js
++++ b/android/app/src/main/assets/www/main.js
+@@ -793,6 +793,21 @@ export function emit(kind) {
+     if (!m.def.needs.includes(kind)) continue;
+     if (act.has(m.pi)) runUpdate(m, kind); else m.dirty = true;
+   }
++  armFast();
++}
++
++// The 4×/s "fast" tick runs only while a widget on screen moves between data updates (a playing media position, a running
++// stopwatch). A widget tells it with fastWanted(); one that needs 'fast' without saying so always gets it. Upstream ticked every
++// 250 ms whatever was on screen (UPSTREAM-STRATEGY P6, W3-PANEL.md TP-W3-06). armFast() is cheap and called after every update.
++export let fastTimer = 0;
++export function fastWanted() {
++  if (nightOn) return false;
++  const act = activeSet();
++  return mounted.some((m) => act.has(m.pi) && m.def.needs.includes('fast') && (typeof m.inst.fastWanted !== 'function' || m.inst.fastWanted()));
++}
++export function armFast() {
++  if (fastTimer || !fastWanted()) return;
++  fastTimer = setTimeout(() => { fastTimer = 0; emit('fast'); }, 250);
+ }
+ 
+ export function setActive(all = false) {
+@@ -803,6 +818,7 @@ export function setActive(all = false) {
+       for (const k of m.def.needs) runUpdate(m, k);
+     }
+   }
++  armFast();
+ }
+ 
+ // ---------------------------------------------------------------- navigation: swipe, dots, overview, volume keys, agent events
+@@ -1402,7 +1418,6 @@ applyDisplay();
+ tick();
+ loadWeather();
+ setInterval(loadWeather, 15 * 60_000);
+-setInterval(() => { if (!nightOn) emit('fast'); }, 250);
+ setInterval(() => { if (online && anyNeeds('quotas')) loadQuotas(); }, 30_000);
+ setInterval(() => { if (online && anyNeeds('calendar')) loadCalendar(); }, 120_000);
+ setInterval(() => { if (online && anyNeeds('work') && !streaming()) loadWork(); }, 3000);
+diff --git a/android/app/src/main/assets/www/widgets/basic.js b/android/app/src/main/assets/www/widgets/basic.js
+index 011161e..ac0006c 100644
+--- a/android/app/src/main/assets/www/widgets/basic.js
++++ b/android/app/src/main/assets/www/widgets/basic.js
+@@ -1,4 +1,4 @@
+-import { $, API, D, LEVEL_COLOR, LOCALE, MEDIA_HTML, METRICS, Q_STYLE, S_ORDER, ago, api, averageColor, buzz, cfg, chart, color, cssVar, emit, fillIcon, fmtDur, fmtMem, fmtReset, fmtTime, fmtValue, h, haptic, hist, keyButton, levelOf, media, metricText, online, openSheet, paceInfo, pad, prRow, pushView, quotaProviders, r1, renderStatus, ringSvg, setArtColor, setVolDragging, shortDur, store, tick, toast, volDragging, wxBlock, wxIcon } from '../main.js';
++import { $, API, D, armFast, LEVEL_COLOR, LOCALE, MEDIA_HTML, METRICS, Q_STYLE, S_ORDER, ago, api, averageColor, buzz, cfg, chart, color, cssVar, emit, fillIcon, fmtDur, fmtMem, fmtReset, fmtTime, fmtValue, h, haptic, hist, keyButton, levelOf, media, metricText, online, openSheet, paceInfo, pad, prRow, pushView, quotaProviders, r1, renderStatus, ringSvg, setArtColor, setVolDragging, shortDur, store, tick, toast, volDragging, wxBlock, wxIcon } from '../main.js';
+ import { W } from '../registry.js';
+ 
+ // ================================================================= widgets
+@@ -99,6 +99,7 @@ W.media = {
+         media.playing = !media.playing; // optimistic update
+         media.at = performance.now();
+         box.classList.toggle('playing', media.playing);
++        armFast();
+       }
+       try { await api('/media/' + action, 'POST'); } catch (_) {}
+     }));
+@@ -124,6 +125,7 @@ W.media = {
+     });
+ 
+     return {
++      fastWanted: () => !!media && media.playing && media.durMs > 0,
+       update(kind) {
+         if (kind === 'fast') {
+           if (!media || !(media.durMs > 0)) return;
+diff --git a/android/app/src/main/assets/www/widgets/time.js b/android/app/src/main/assets/www/widgets/time.js
+index a0250b1..7ed262d 100644
+--- a/android/app/src/main/assets/www/widgets/time.js
++++ b/android/app/src/main/assets/www/widgets/time.js
+@@ -1,4 +1,4 @@
+-import { $, buzz, fmtTime, h, haptic, pad, r1, store, tick, toast } from '../main.js';
++import { $, armFast, buzz, fmtTime, h, haptic, pad, r1, store, tick, toast } from '../main.js';
+ import { W } from '../registry.js';
+ import { dialEl, lines } from './helpers.js';
+ 
+@@ -70,11 +70,11 @@ W.stopwatch = {
+     const elapsed = () => st.acc + (st.start ? Date.now() - st.start : 0);
+     const fmtSw = (ms) => { const s = Math.floor(ms / 1000); const hh = Math.floor(s / 3600); return (hh ? hh + ':' + pad(Math.floor((s % 3600) / 60)) : Math.floor(s / 60)) + ':' + pad(s % 60) + '.' + Math.floor((ms % 1000) / 100); };
+     const renderLaps = () => laps.replaceChildren(...st.laps.slice(-6).reverse().map((l, i, arr) => h('div', 'sw-lap', h('span', null, '#' + (st.laps.length - i)), h('span', null, fmtSw(l)))));
+-    const paint = () => { a.textContent = st.start ? '⏸' : '▶'; b.textContent = st.start ? '⚑' : '↺'; box.classList.toggle('run', !!st.start); };
+-    a.addEventListener('click', () => { haptic(); if (st.start) { st.acc = elapsed(); st.start = null; } else st.start = Date.now(); save(); paint(); });
++    const paint = () => { t.textContent = fmtSw(elapsed()); a.textContent = st.start ? '⏸' : '▶'; b.textContent = st.start ? '⚑' : '↺'; box.classList.toggle('run', !!st.start); };
++    a.addEventListener('click', () => { haptic(); if (st.start) { st.acc = elapsed(); st.start = null; } else st.start = Date.now(); save(); paint(); armFast(); });
+     b.addEventListener('click', () => { haptic(); if (st.start) st.laps.push(elapsed()); else st = { start: null, acc: 0, laps: [] }; save(); paint(); renderLaps(); });
+     paint(); renderLaps();
+-    return { update() { t.textContent = fmtSw(elapsed()); } };
++    return { fastWanted: () => !!st.start, update() { t.textContent = fmtSw(elapsed()); } };
+   },
+ };
+ 

@@ -1,0 +1,10 @@
+{
+ "endpoint": "/api/pair",
+ "status": 200,
+ "content_type": "application/json; charset=utf-8",
+ "bytes": 31,
+ "shape": {
+  "enabled": "bool",
+  "pc": "str"
+ }
+}

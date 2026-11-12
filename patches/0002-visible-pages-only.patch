@@ -1,0 +1,35 @@
+PhoneBox 0.6.9 — panel: only the visible page is updated.
+Why: emit() updated cur ± 1 pages on every event (activeSet); the off-screen neighbour paid DOM + canvas work every second.
+- activeSet(): visible page (+ floor/ceil of the scroll position); neighbours only while a finger is on the pager or a settle is running.
+- touchstart: dirty widgets of the neighbours are refreshed once (no stale value under the finger).
+Measured (headless Chromium, 873x393 touch, CPU x4, 10 s at 1 Hz): off-screen page 82 DOM mutations / 400 canvas calls -> 0 / 0.
+Mutant: restoring cur ± 1 turns the test red.
+
+diff --git a/android/app/src/main/assets/www/main.js b/android/app/src/main/assets/www/main.js
+index bfe1430..77e65d3 100644
+--- a/android/app/src/main/assets/www/main.js
++++ b/android/app/src/main/assets/www/main.js
+@@ -771,7 +771,14 @@ export function buildLayout() {
+   requestAnimationFrame(() => setActive(true));
+ }
+ 
+-export function activeSet() { return new Set([curPage - 1, curPage, curPage + 1]); }
++// Pages on screen get fresh data: the current one, and its neighbours only while a finger is on the pager or a page is settling
++// (they show at the edges then). Off-screen pages are marked dirty and catch up when they come into view (setActive).
++// Upstream updated curPage ± 1 all the time, i.e. one or two pages nobody sees (W3-PANEL.md TP-W3-01).
++export function activeSet() {
++  if (dragging || settling) return new Set([curPage - 1, curPage, curPage + 1]);
++  const x = pager.scrollLeft / window.innerWidth;
++  return new Set([curPage, Math.floor(x), Math.ceil(x)]);
++}
+ export const pageOf = (kind) => mounted.filter((m) => m.pi === curPage && m.def.needs.includes(kind)).length > 0;
+ export const anyNeeds = (kind) => mounted.some((m) => m.def.needs.includes(kind));
+ 
+@@ -840,6 +847,7 @@ pager.addEventListener('touchstart', (e) => {
+   cancelAnimationFrame(settling); settling = 0;
+   pager.style.scrollSnapType = 'none';
+   dragging = true;
++  setActive();   // the neighbours come into view under the finger: bring their dirty widgets up to date once
+   drag = { left: pager.scrollLeft, page: Math.round(pager.scrollLeft / window.innerWidth), x: e.touches[0].clientX, t: performance.now(), vx: 0 };
+ }, { passive: true });
+ pager.addEventListener('touchmove', (e) => {

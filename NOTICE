@@ -1,0 +1,8 @@
+This repository builds on PhoneBox (https://github.com/ersinkoc/phonebox), MIT License,
+Copyright (c) 2026 Ersin KOÇ.
+
+- patches/ contains unified diffs against PhoneBox 0.6.9 (commit 620c904). Applying them produces a
+  modified PhoneBox; the PhoneBox MIT license and copyright notice continue to apply to those sources.
+- agent/ is an independent Rust implementation of the PhoneBox 0.6.9 desktop-agent HTTP/SSE contract.
+  Its contract fixtures (agent/tests/fixtures/) record response *shapes* of PhoneBox 0.6.9.
+- apk/ builds the PhoneBox Android project from upstream source; it contains no upstream code.

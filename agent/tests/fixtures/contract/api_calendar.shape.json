@@ -1,0 +1,11 @@
+{
+ "endpoint": "/api/calendar",
+ "status": 200,
+ "content_type": "application/json; charset=utf-8",
+ "bytes": 49,
+ "shape": {
+  "errors": [],
+  "events": [],
+  "updated": "int"
+ }
+}

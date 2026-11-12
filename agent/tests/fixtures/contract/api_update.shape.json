@@ -1,0 +1,21 @@
+{
+ "endpoint": "/api/update",
+ "status": 200,
+ "content_type": "application/json; charset=utf-8",
+ "bytes": 266,
+ "shape": {
+  "auto": "bool",
+  "installed": "bool",
+  "status": {
+   "agentUpdate": "bool",
+   "agentVersion": "str",
+   "appUpdate": "bool",
+   "appVersion": "str",
+   "error": "NoneType",
+   "lastCheck": "int",
+   "latest": "str",
+   "releaseUrl": "str",
+   "state": "str"
+  }
+ }
+}

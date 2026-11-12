@@ -1,0 +1,39 @@
+[package]
+name = "phoned"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "phoned: PhoneBox 0.6.9 telefon panelinin Fedora ajanı (Rust, gölge 127.0.0.1:8766)"
+license = "MIT"
+
+[dependencies]
+tokio = { version = "=1.54.1", features = ["rt", "macros", "time", "net", "sync", "signal", "fs", "io-util", "process"] }
+axum = { version = "=0.8.9", default-features = false, features = ["http1", "tokio", "query"] }
+zbus = { version = "=6.2.1", default-features = false, features = ["tokio", "proxy"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+futures-util = { version = "=0.3.34", default-features = false, features = ["std"] }
+libc = "=0.2.191"
+
+[dev-dependencies]
+tower = { version = "=0.5.3", features = ["util"] }
+http-body-util = "=0.1.5"
+tokio = { version = "=1.54.1", features = ["test-util"] }
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"
+todo = "deny"
+allow_attributes_without_reason = "deny"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"

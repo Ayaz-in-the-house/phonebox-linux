@@ -1,0 +1,44 @@
+{
+ "endpoint": "/api/push",
+ "status": 200,
+ "content_type": "application/json; charset=utf-8",
+ "bytes": 2112,
+ "shape": {
+  "items": {
+   "herdr": {
+    "at": "int",
+    "data": {
+     "agents": [
+      {
+       "cwd": "str",
+       "focused": "bool",
+       "kind": "str",
+       "name": "str",
+       "pane": "str",
+       "since": "float",
+       "slot": "int",
+       "status": "str"
+      }
+     ],
+     "counts": {
+      "blocked": "int",
+      "done": "int",
+      "idle": "int",
+      "working": "int"
+     },
+     "items": [
+      {
+       "label": "str",
+       "level": "str",
+       "value": "str"
+      }
+     ],
+     "sub": "str",
+     "title": "str"
+    },
+    "expiresAt": "NoneType"
+   }
+  },
+  "version": "int"
+ }
+}

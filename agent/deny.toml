@@ -1,0 +1,16 @@
+# cargo-deny 0.20 — advisory (RustSec) + kaynak + yasaklar. Lisans denetimi ayrı karar (docs/DECISIONS.md ADR-06).
+[graph]
+all-features = false
+
+[advisories]
+version = 2
+yanked = "deny"
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

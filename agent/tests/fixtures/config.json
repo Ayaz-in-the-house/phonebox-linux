@@ -1,0 +1,676 @@
+{
+  "deviceSerial": "SERIAL0",
+  "adbPath": "/usr/bin/adb",
+  "weather": {
+    "city": "Testkent",
+    "lat": 52.0,
+    "lon": 4.5
+  },
+  "night": {
+    "enabled": true,
+    "start": "00:30",
+    "end": "07:30",
+    "brightness": 0.02
+  },
+  "display": {
+    "showSeconds": true,
+    "idleReturnSec": 90,
+    "vibrate": true,
+    "volumeKeys": true,
+    "orientation": "auto",
+    "theme": "default",
+    "accent": "#2dd4bf",
+    "artTint": true,
+    "autoBrightness": false,
+    "nightWhenDark": false,
+    "proximityWake": true,
+    "pin": false,
+    "homeScreen": false,
+    "keepAwake": true,
+    "switchCountdownSec": 3,
+    "touchGraceSec": 20,
+    "minDwellSec": 15,
+    "holdMaxMin": 30
+  },
+  "lan": {
+    "enabled": false,
+    "port": 8766,
+    "token": "test-lan-token",
+    "webhookToken": "test-webhook-token"
+  },
+  "updates": {
+    "auto": false,
+    "repo": "ersinkoc/phonebox"
+  },
+  "claude": {
+    "phoneApprovals": false,
+    "timeoutSec": 90,
+    "onlyWhenAway": false
+  },
+  "pages": [
+    {
+      "id": "home",
+      "title": "Home",
+      "icon": "🏠",
+      "enabled": true,
+      "widgets": [
+        {
+          "id": "clock",
+          "type": "clock",
+          "x": 0,
+          "y": 0,
+          "w": 6,
+          "h": 4,
+          "options": {
+            "status": true,
+            "weather": true
+          }
+        },
+        {
+          "id": "media",
+          "type": "media",
+          "x": 6,
+          "y": 0,
+          "w": 6,
+          "h": 4
+        },
+        {
+          "id": "stat",
+          "type": "stat",
+          "x": 0,
+          "y": 4,
+          "w": 3,
+          "h": 2,
+          "options": {
+            "metric": "cpu"
+          }
+        },
+        {
+          "id": "stat-2",
+          "type": "stat",
+          "x": 3,
+          "y": 4,
+          "w": 3,
+          "h": 2,
+          "options": {
+            "metric": "gpu"
+          }
+        },
+        {
+          "id": "stat-3",
+          "type": "stat",
+          "x": 6,
+          "y": 4,
+          "w": 3,
+          "h": 2,
+          "options": {
+            "metric": "ram"
+          }
+        },
+        {
+          "id": "stat-4",
+          "type": "stat",
+          "x": 9,
+          "y": 4,
+          "w": 3,
+          "h": 2,
+          "options": {
+            "metric": "net"
+          }
+        },
+        {
+          "id": "cmd1",
+          "type": "command",
+          "x": 0,
+          "y": 4,
+          "w": 2,
+          "h": 2,
+          "options": {
+            "title": "T",
+            "interval": 5,
+            "command": "echo secret-cmd",
+            "commandUnix": "echo secret-unix"
+          }
+        }
+      ]
+    },
+    {
+      "id": "herdr",
+      "title": "Ajanlar",
+      "icon": "🤖",
+      "enabled": true,
+      "widgets": [
+        {
+          "id": "html",
+          "type": "html",
+          "x": 0,
+          "y": 0,
+          "w": 6,
+          "h": 6,
+          "options": {
+            "html": "<b>test</b>",
+            "transparent": true
+          }
+        },
+        {
+          "id": "html-2",
+          "type": "html",
+          "x": 6,
+          "y": 0,
+          "w": 6,
+          "h": 6,
+          "options": {
+            "html": "<b>test</b>",
+            "transparent": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "ai",
+      "title": "AI quotas",
+      "icon": "✳️",
+      "enabled": true,
+      "widgets": [
+        {
+          "id": "quotas",
+          "type": "quotas",
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 6
+        }
+      ]
+    },
+    {
+      "id": "work",
+      "title": "Sessions",
+      "icon": "🤖",
+      "enabled": true,
+      "widgets": [
+        {
+          "id": "sessions",
+          "type": "sessions",
+          "x": 0,
+          "y": 0,
+          "w": 7,
+          "h": 6
+        },
+        {
+          "id": "github",
+          "type": "github",
+          "x": 7,
+          "y": 0,
+          "w": 5,
+          "h": 6
+        }
+      ]
+    },
+    {
+      "id": "system",
+      "title": "System",
+      "icon": "📊",
+      "enabled": true,
+      "widgets": [
+        {
+          "id": "chart",
+          "type": "chart",
+          "x": 0,
+          "y": 0,
+          "w": 6,
+          "h": 3,
+          "options": {
+            "metrics": [
+              "cpu"
+            ]
+          }
+        },
+        {
+          "id": "chart-2",
+          "type": "chart",
+          "x": 6,
+          "y": 0,
+          "w": 6,
+          "h": 3,
+          "options": {
+            "metrics": [
+              "gpu"
+            ]
+          }
+        },
+        {
+          "id": "meters",
+          "type": "meters",
+          "x": 0,
+          "y": 3,
+          "w": 6,
+          "h": 3
+        },
+        {
+          "id": "chart-3",
+          "type": "chart",
+          "x": 6,
+          "y": 3,
+          "w": 6,
+          "h": 3,
+          "options": {
+            "metrics": [
+              "down",
+              "up"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "procs",
+      "title": "Processes",
+      "icon": "⚙️",
+      "enabled": true,
+      "widgets": [
+        {
+          "id": "processes",
+          "type": "processes",
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 6
+        }
+      ]
+    },
+    {
+      "id": "deck",
+      "title": "Shortcuts",
+      "icon": "🎛️",
+      "enabled": true,
+      "widgets": [
+        {
+          "id": "shortcuts",
+          "type": "shortcuts",
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 6,
+          "options": {
+            "columns": 4,
+            "ids": [
+              "terminal",
+              "files",
+              "vscode",
+              "browser",
+              "spotify",
+              "calc",
+              "settings",
+              "monitor",
+              "mute",
+              "monitoroff",
+              "lock"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "music",
+      "title": "Music",
+      "icon": "🎵",
+      "enabled": true,
+      "widgets": [
+        {
+          "id": "media",
+          "type": "media",
+          "x": 0,
+          "y": 0,
+          "w": 8,
+          "h": 6
+        },
+        {
+          "id": "clock",
+          "type": "clock",
+          "x": 8,
+          "y": 0,
+          "w": 4,
+          "h": 2,
+          "options": {
+            "status": false,
+            "weather": false
+          }
+        },
+        {
+          "id": "forecast",
+          "type": "forecast",
+          "x": 8,
+          "y": 2,
+          "w": 4,
+          "h": 4,
+          "options": {
+            "mode": "daily"
+          }
+        }
+      ]
+    },
+    {
+      "id": "focus",
+      "title": "Focus",
+      "icon": "🍅",
+      "enabled": false,
+      "widgets": [
+        {
+          "id": "pomodoro",
+          "type": "pomodoro",
+          "x": 0,
+          "y": 0,
+          "w": 5,
+          "h": 6
+        },
+        {
+          "id": "note",
+          "type": "note",
+          "x": 5,
+          "y": 0,
+          "w": 7,
+          "h": 4,
+          "options": {
+            "text": "Today:\n• \n• \n• "
+          }
+        },
+        {
+          "id": "clock",
+          "type": "clock",
+          "x": 5,
+          "y": 4,
+          "w": 7,
+          "h": 2,
+          "options": {
+            "status": false,
+            "weather": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "world",
+      "title": "World",
+      "icon": "🌍",
+      "enabled": false,
+      "widgets": [
+        {
+          "id": "worldclock",
+          "type": "worldclock",
+          "x": 0,
+          "y": 0,
+          "w": 12,
+          "h": 2
+        },
+        {
+          "id": "forecast",
+          "type": "forecast",
+          "x": 0,
+          "y": 2,
+          "w": 8,
+          "h": 4,
+          "options": {
+            "mode": "hourly"
+          }
+        },
+        {
+          "id": "calendar",
+          "type": "calendar",
+          "x": 8,
+          "y": 2,
+          "w": 4,
+          "h": 4
+        }
+      ]
+    }
+  ],
+  "shortcuts": [
+    {
+      "id": "k0",
+      "label": "Kisayol 0",
+      "icon": "⌨️",
+      "color": "#4b5563",
+      "cmd": "builtin:mute",
+      "toggle": false
+    },
+    {
+      "id": "k1",
+      "label": "Kisayol 1",
+      "icon": "📁",
+      "color": "#e5b84b",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k2",
+      "label": "Kisayol 2",
+      "icon": "📝",
+      "color": "#2f80ed",
+      "cmd": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k3",
+      "label": "Kisayol 3",
+      "icon": "🌐",
+      "color": "#0ea5e9",
+      "cmd": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k4",
+      "label": "Kisayol 4",
+      "icon": "🎧",
+      "color": "#1db954",
+      "cmd": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k5",
+      "label": "Kisayol 5",
+      "icon": "🧮",
+      "color": "#64748b",
+      "cmd": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k6",
+      "label": "Kisayol 6",
+      "icon": "⚙️",
+      "color": "#94a3b8",
+      "cmd": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k7",
+      "label": "Kisayol 7",
+      "icon": "📊",
+      "color": "#22c55e",
+      "cmd": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k8",
+      "label": "Kisayol 8",
+      "icon": "🔇",
+      "color": "#f59e0b",
+      "cmd": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k9",
+      "label": "Kisayol 9",
+      "icon": "🌙",
+      "color": "#6366f1",
+      "cmd": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k10",
+      "label": "Kisayol 10",
+      "icon": "🔒",
+      "color": "#ef4444",
+      "cmd": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k11",
+      "label": "Kisayol 11",
+      "icon": "🤖",
+      "color": "#2dd4bf",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k12",
+      "label": "Kisayol 12",
+      "icon": "🤖",
+      "color": "#2dd4bf",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k13",
+      "label": "Kisayol 13",
+      "icon": "🤖",
+      "color": "#2dd4bf",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k14",
+      "label": "Kisayol 14",
+      "icon": "🤖",
+      "color": "#2dd4bf",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k15",
+      "label": "Kisayol 15",
+      "icon": "🤖",
+      "color": "#2dd4bf",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k16",
+      "label": "Kisayol 16",
+      "icon": "🤖",
+      "color": "#2dd4bf",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k17",
+      "label": "Kisayol 17",
+      "icon": "🤖",
+      "color": "#2dd4bf",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k18",
+      "label": "Kisayol 18",
+      "icon": "🤖",
+      "color": "#2dd4bf",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k19",
+      "label": "Kisayol 19",
+      "icon": "🤖",
+      "color": "#2dd4bf",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k20",
+      "label": "Kisayol 20",
+      "icon": "🤖",
+      "color": "#2dd4bf",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k21",
+      "label": "Kisayol 21",
+      "icon": "🤖",
+      "color": "#2dd4bf",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k22",
+      "label": "Kisayol 22",
+      "icon": "🤖",
+      "color": "#2dd4bf",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k23",
+      "label": "Kisayol 23",
+      "icon": "🤖",
+      "color": "#2dd4bf",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k24",
+      "label": "Kisayol 24",
+      "icon": "🤖",
+      "color": "#2dd4bf",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k25",
+      "label": "Kisayol 25",
+      "icon": "🤖",
+      "color": "#2dd4bf",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    },
+    {
+      "id": "k26",
+      "label": "Kisayol 26",
+      "icon": "🤖",
+      "color": "#2dd4bf",
+      "cmd": "echo test",
+      "args": "echo test",
+      "toggle": false
+    }
+  ],
+  "rules": [],
+  "charge": {
+    "enabled": false,
+    "min": 50,
+    "max": 80,
+    "method": "ha"
+  },
+  "phones": [],
+  "calendars": [],
+  "homeAssistant": {},
+  "obs": {
+    "enabled": false,
+    "url": "ws://127.0.0.1:4455"
+  }
+}

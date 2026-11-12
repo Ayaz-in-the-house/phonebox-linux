@@ -1,0 +1,15 @@
+{
+ "endpoint": "/api/docker",
+ "status": 200,
+ "content_type": "application/json; charset=utf-8",
+ "bytes": 89,
+ "shape": {
+  "control": "bool",
+  "snapshot": {
+   "available": "bool",
+   "containers": [],
+   "error": "NoneType",
+   "updated": "int"
+  }
+ }
+}

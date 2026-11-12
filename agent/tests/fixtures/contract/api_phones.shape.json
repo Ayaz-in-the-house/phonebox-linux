@@ -1,0 +1,16 @@
+{
+ "endpoint": "/api/phones",
+ "status": 200,
+ "content_type": "application/json; charset=utf-8",
+ "bytes": 116,
+ "shape": [
+  {
+   "id": "str",
+   "lastSeen": "int",
+   "model": "str",
+   "name": "NoneType",
+   "pages": "NoneType",
+   "via": "str"
+  }
+ ]
+}

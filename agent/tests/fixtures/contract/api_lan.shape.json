@@ -1,0 +1,16 @@
+{
+ "endpoint": "/api/lan",
+ "status": 200,
+ "content_type": "application/json; charset=utf-8",
+ "bytes": 168,
+ "shape": {
+  "active": "bool",
+  "configured": "bool",
+  "fingerprint": "NoneType",
+  "hosts": [
+   "str"
+  ],
+  "port": "int",
+  "restartNeeded": "bool"
+ }
+}

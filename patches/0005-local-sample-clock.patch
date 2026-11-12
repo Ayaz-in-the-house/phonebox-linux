@@ -1,0 +1,139 @@
+PhoneBox 0.6.9 — panel: chart samples come from the panel's own 1 s clock.
+Why: a sample was only appended when a state event arrived; a missed second vanished from the chart and the time axis compressed.
+- sampleHist(): tick() samples the last state every second (holds the last value); no samples when the agent is silent > 5 s (as before).
+- Numbers and the new chart sample are painted in the same frame (1 frame per second, not 2).
+Measured: events cut for 2.5 s inside 10 s -> 8 samples before, 10 after.
+
+diff --git a/android/app/src/main/assets/www/main.js b/android/app/src/main/assets/www/main.js
+index 7c781fc..faac5a3 100644
+--- a/android/app/src/main/assets/www/main.js
++++ b/android/app/src/main/assets/www/main.js
+@@ -1275,6 +1275,10 @@ export function tick() {
+     else { navQueue.push({ kind: 'home', at: Date.now(), priority: -1 }); pump(); }
+   }
+   if (!nightOn) emit('tick');
++  // the new sample is drawn with the next state event, in the same frame as the numbers (one frame a second, not two);
++  // if no event came since the last tick, it is drawn now (the chart keeps moving through a stream gap)
++  if (histPending && !nightOn) { histPending = false; emit('hist'); }
++  if (sampleHist()) histPending = true;
+   setTimeout(tick, 1000 - (Date.now() % 1000) + 5);
+ }
+ 
+@@ -1373,21 +1377,29 @@ export function applyState(s) {
+   if (ruleHold && Array.isArray(s.rules) && !s.rules.includes(ruleHold.rule) && Date.now() - ruleHold.at > 8000) requestBack(ruleHold.rule);
+   rulesPaused = s.rulesPaused || null;
+   if (!$('overview').hidden) renderRulesBtn();
+-  {
+-    const pc = s.pc;
+-    if (pc) {
+-      pushHist('cpu', pc.cpu);
+-      pushHist('gpu', pc.gpu?.util);
+-      pushHist('ram', pc.ramUsedGb);
+-      pushHist('vram', pc.gpu?.vramTotal ? (pc.gpu.vramUsed / pc.gpu.vramTotal) * 100 : 0);
+-      pushHist('down', pc.netDownBps);
+-      pushHist('up', pc.netUpBps);
+-      pushHist('ping', s.ping?.ms);
+-      pushHist('gputemp', pc.gpu?.temp);
+-      pushHist('cputemp', pc.cpuTemp);
+-    }
+-  }
+   emit('state');
++  if (histPending && !nightOn) { histPending = false; emit('hist'); }
++}
++
++// Charts sample on the panel's own 1 s clock (tick), not on agent events: a second without an event keeps the last value
++// instead of losing a sample, so the time axis stays even (EXPERIENCE-ARCHITECTURE.md K3 / TP-EX-01, W3-PANEL.md TP-W3-04).
++// This also lets the agent send state only when it changes later on. No event for 5 s (agent gone) → no samples, as before.
++export let histSeq = 0;   // counts samples; charts use it to draw only the newest slice (chart opts.seq)
++export let histPending = false;   // a sample not drawn yet
++export function sampleHist() {
++  const s = D.state, pc = s?.pc;
++  if (!pc || Date.now() - lastStateAt > 5000) return false;
++  pushHist('cpu', pc.cpu);
++  pushHist('gpu', pc.gpu?.util);
++  pushHist('ram', pc.ramUsedGb);
++  pushHist('vram', pc.gpu?.vramTotal ? (pc.gpu.vramUsed / pc.gpu.vramTotal) * 100 : 0);
++  pushHist('down', pc.netDownBps);
++  pushHist('up', pc.netUpBps);
++  pushHist('ping', s.ping?.ms);
++  pushHist('gputemp', pc.gpu?.temp);
++  pushHist('cputemp', pc.cpuTemp);
++  histSeq++;
++  return true;
+ }
+ 
+ // Live stream from the Android shell (see AgentStream.kt); polling below is the fallback when it is not running.
+diff --git a/android/app/src/main/assets/www/widgets/basic.js b/android/app/src/main/assets/www/widgets/basic.js
+index 482bfb2..c092e92 100644
+--- a/android/app/src/main/assets/www/widgets/basic.js
++++ b/android/app/src/main/assets/www/widgets/basic.js
+@@ -1,4 +1,4 @@
+-import { $, API, D, armFast, LEVEL_COLOR, LOCALE, MEDIA_HTML, METRICS, Q_STYLE, S_ORDER, ago, api, averageColor, buzz, cfg, chart, color, cssVar, emit, fillIcon, fmtDur, fmtMem, fmtReset, fmtTime, fmtValue, h, haptic, hist, keyButton, levelOf, media, metricText, online, openSheet, paceInfo, pad, prRow, pushView, quotaProviders, r1, renderStatus, ringSvg, setArtColor, setVolDragging, shortDur, store, tick, toast, volDragging, wxBlock, wxIcon } from '../main.js';
++import { $, API, D, armFast, histSeq, LEVEL_COLOR, LOCALE, MEDIA_HTML, METRICS, Q_STYLE, S_ORDER, ago, api, averageColor, buzz, cfg, chart, color, cssVar, emit, fillIcon, fmtDur, fmtMem, fmtReset, fmtTime, fmtValue, h, haptic, hist, keyButton, levelOf, media, metricText, online, openSheet, paceInfo, pad, prRow, pushView, quotaProviders, r1, renderStatus, ringSvg, setArtColor, setVolDragging, shortDur, store, tick, toast, volDragging, wxBlock, wxIcon } from '../main.js';
+ import { W } from '../registry.js';
+ 
+ // ================================================================= widgets
+@@ -167,7 +167,7 @@ W.media = {
+ };
+ 
+ W.stat = {
+-  needs: ['state'],
++  needs: ['state', 'hist'],   // 'hist' = a new chart sample (main.js sampleHist), 'state' = new numbers
+   create(box, { o }) {
+     const m = METRICS[o.metric] || METRICS.cpu;
+     const c = color(m.color);
+@@ -176,14 +176,16 @@ W.stat = {
+     const val = h('b', null, '—'), unit = h('small'), sub = h('div', 't-sub', ' ');
+     box.append(canvas, h('div', 't-label', m.label), h('div', 't-val', val, unit), sub);
+     return {
+-      update() {
++      update(kind) {
+         const s = D.state;
+         if (!s) return;
+-        const [v, u] = metricText(m, s);
+-        val.textContent = v;
+-        unit.textContent = u;
+-        sub.textContent = m.sub?.(s) || ' ';
+-        chart(canvas, [{ data: hist[m.hist || o.metric] || hist.cpu, color: c, max: m.max(s) }]);
++        if (kind !== 'hist') {
++          const [v, u] = metricText(m, s);
++          val.textContent = v;
++          unit.textContent = u;
++          sub.textContent = m.sub?.(s) || ' ';
++        }
++        if (kind !== 'state') chart(canvas, [{ data: hist[m.hist || o.metric] || hist.cpu, color: c, max: m.max(s) }], { seq: histSeq });
+       },
+     };
+   },
+@@ -218,7 +220,7 @@ W.gauge = {
+ };
+ 
+ W.chart = {
+-  needs: ['state'],
++  needs: ['state', 'hist'],
+   create(box, { o }) {
+     const keys = (Array.isArray(o.metrics) && o.metrics.length ? o.metrics : ['cpu']).filter((k) => METRICS[k]);
+     const single = keys.length === 1 ? METRICS[keys[0]] : null;
+@@ -230,9 +232,13 @@ W.chart = {
+     const canvas = h('canvas');
+     box.append(head, main, canvas);
+     return {
+-      update() {
++      update(kind) {
+         const s = D.state;
+         if (!s) return;
++        if (kind === 'hist') {
++          chart(canvas, keys.map((k) => ({ data: hist[METRICS[k].hist || k], color: color(METRICS[k].color), max: METRICS[k].max(s) })), { grid: true, seq: histSeq });
++          return;
++        }
+         if (single) {
+           const [v, u] = metricText(single, s);
+           main.replaceChildren(h('b', null, v), h('small', null, u), h('span', 'chips', single.sub?.(s) ? h('span', 'chip', single.sub(s)) : ''));
+@@ -247,7 +253,6 @@ W.chart = {
+           }));
+           head.lastChild.textContent = isNet && s.ping ? `Ping ${s.ping.ms != null ? Math.round(s.ping.ms) + ' ms' : '—'} · loss ${s.ping.lossPct}%` : '';
+         }
+-        chart(canvas, keys.map((k) => ({ data: hist[METRICS[k].hist || k], color: color(METRICS[k].color), max: METRICS[k].max(s) })), { grid: true });
+       },
+     };
+   },

@@ -1,0 +1,96 @@
+{
+ "window_s": 12,
+ "events": {
+  "state": {
+   "count": 11,
+   "bytes": {
+    "min": 822,
+    "max": 826,
+    "sum": 9067
+   },
+   "shape": {
+    "audio": {
+     "muted": "bool",
+     "volume": "int"
+    },
+    "cfgVersion": "int",
+    "evSeq": "int",
+    "events": [],
+    "host": "str",
+    "media": "NoneType",
+    "obs": "NoneType",
+    "pc": {
+     "cpu": "float",
+     "cpuName": "str",
+     "cpuTemp": "float",
+     "disks": [
+      {
+       "name": "str",
+       "totalGb": "int",
+       "usedGb": "int"
+      }
+     ],
+     "gpu": {
+      "clock": "int",
+      "fan": "NoneType",
+      "name": "str",
+      "power": "float",
+      "powerLimit": "NoneType",
+      "temp": "int",
+      "util": "int",
+      "vramTotal": "int",
+      "vramUsed": "float"
+     },
+     "netDownBps": "int",
+     "netUpBps": "int",
+     "ramTotalGb": "int",
+     "ramUsedGb": "float",
+     "uptimeSec": "int"
+    },
+    "ping": {
+     "avgMs": "float",
+     "host": "str",
+     "lossPct": "float",
+     "ms": "int"
+    },
+    "privacy": {
+     "camera": "bool",
+     "cameraApps": [],
+     "mic": "bool",
+     "micApps": []
+    },
+    "pushVersion": "int",
+    "rules": [],
+    "rulesPaused": "NoneType",
+    "toggles": {
+     "mute": "bool"
+    },
+    "ts": "int",
+    "update": {
+     "agent": "bool",
+     "app": "bool",
+     "latest": "str"
+    }
+   }
+  },
+  "work": {
+   "count": 1,
+   "bytes": {
+    "min": 271,
+    "max": 271,
+    "sum": 271
+   },
+   "shape": {
+    "github": {
+     "error": "str",
+     "myPrs": [],
+     "notifications": "int",
+     "reviewRequests": [],
+     "updatedAt": "NoneType",
+     "user": "NoneType"
+    },
+    "sessions": []
+   }
+  }
+ }
+}

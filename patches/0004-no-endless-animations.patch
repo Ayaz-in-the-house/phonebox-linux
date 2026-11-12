@@ -1,0 +1,79 @@
+PhoneBox 0.6.9 — panel: no endless CSS animations.
+Why: clock colon (blink), session dots (pulse) and ON AIR / OBS (oa-glow) looped forever -> repaint on every frame.
+- Clock colon: toggled by the clock widget's own 1 s tick (.dim on odd seconds), same look, no animation.
+- pulse / oa-glow: 3–4 iterations, then a steady light.
+Measured (8 s after load, document.getAnimations()): infinite 5 -> 0, running 5 -> 0.
+
+diff --git a/android/app/src/main/assets/www/style.css b/android/app/src/main/assets/www/style.css
+index 006dda7..8149636 100644
+--- a/android/app/src/main/assets/www/style.css
++++ b/android/app/src/main/assets/www/style.css
+@@ -215,7 +215,9 @@ body.night #navCard, body.night #navChip { display: none; }
+   line-height: .95; letter-spacing: -0.04em; margin-left: -.03em;
+   display: flex; align-items: flex-start;
+ }
+-.clock .colon { opacity: .55; margin: 0 .01em; animation: blink 2s steps(1) infinite; }
++/* No endless animation (W3-PANEL.md TP-W3-03): the clock widget dims the colon on odd seconds from its own 1 s tick. */
++.clock .colon { opacity: .55; margin: 0 .01em; }
++.clock .colon.dim { opacity: .2; }
+ .clock .sec { font-size: .2em; font-weight: 400; color: var(--muted); letter-spacing: 0; margin: .5em 0 0 .45em; }
+ .clock .sec:empty { display: none; }
+ @keyframes blink { 50% { opacity: .2; } }
+@@ -377,10 +379,11 @@ body.offline .offline-msg { display: flex; }
+ .s-list { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); grid-auto-rows: 34px; gap: 6px 8px; overflow-y: auto; align-content: start; }
+ .sess { display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 10px; background: rgba(255, 255, 255, .035); border: 1px solid transparent; min-width: 0; }
+ .sess .st { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 8px; background: var(--dim); }
+-.sess.busy .st { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; animation: pulse 1.2s ease-in-out infinite; }
+-.sess.shell .st { background: #60a5fa; box-shadow: 0 0 6px #60a5fa; animation: pulse 1.6s ease-in-out infinite; }
++/* Status dots pulse three times when they appear or change, then stay lit (an endless pulse repaints every frame). */
++.sess.busy .st { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; animation: pulse 1.2s ease-in-out 3; }
++.sess.shell .st { background: #60a5fa; box-shadow: 0 0 6px #60a5fa; animation: pulse 1.6s ease-in-out 3; }
+ .sess.waiting { border-color: rgba(239, 68, 68, .45); background: rgba(239, 68, 68, .1); }
+-.sess.waiting .st { background: #ef4444; box-shadow: 0 0 10px #ef4444; animation: pulse .8s ease-in-out infinite; }
++.sess.waiting .st { background: #ef4444; box-shadow: 0 0 10px #ef4444; animation: pulse .8s ease-in-out 4; }
+ .sess.idle { opacity: .62; }
+ @keyframes pulse { 50% { opacity: .35; } }
+ .sess .tl { font-size: 12px; width: 14px; text-align: center; flex: 0 0 14px; }
+@@ -645,7 +648,7 @@ body.offline .offline-msg { display: flex; }
+ .obs-pill.on b, .obs-pill.on .obs-time { color: #fff; }
+ .obs-pill.live.on { background: rgba(239, 68, 68, .2); border-color: rgba(239, 68, 68, .5); }
+ .obs-pill.rec.on { background: rgba(244, 63, 94, .16); border-color: rgba(244, 63, 94, .45); }
+-.obs-pill.on .obs-led { background: #ef4444; box-shadow: 0 0 8px #ef4444; animation: oa-glow 2s infinite; }
++.obs-pill.on .obs-led { background: #ef4444; box-shadow: 0 0 8px #ef4444; animation: oa-glow 2s 3; }
+ .obs-pill.can:active, .obs-sc:active { transform: scale(.97); }
+ .obs-pill.busy, .obs-sc.busy { opacity: .55; }
+ .obs-scene { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--muted); }
+@@ -710,7 +713,7 @@ body.offline .offline-msg { display: flex; }
+   font-weight: 800; letter-spacing: .14em; font-size: min(26cqh, 13cqw); line-height: 1; color: #3f4651;
+   border: max(2px, 1.6cqh) solid currentColor; border-radius: 12px; padding: .2em .55em .2em .69em; transition: color .3s, background .3s, box-shadow .3s;
+ }
+-.w-onair.on .oa-sign { color: #fff; background: #dc2626; border-color: #fca5a5; animation: oa-glow 2.2s ease-in-out infinite; }
++.w-onair.on .oa-sign { color: #fff; background: #dc2626; border-color: #fca5a5; box-shadow: 0 0 14px rgba(239, 68, 68, .45); animation: oa-glow 2.2s ease-in-out 3; }
+ .oa-sub { font-size: clamp(10px, 9cqh, 14px); color: var(--muted); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+ .w-onair.on .oa-sub { color: #fecaca; }
+ @keyframes oa-glow { 0%, 100% { box-shadow: 0 0 14px rgba(239, 68, 68, .45); } 50% { box-shadow: 0 0 34px rgba(239, 68, 68, .9); } }
+diff --git a/android/app/src/main/assets/www/widgets/basic.js b/android/app/src/main/assets/www/widgets/basic.js
+index ac0006c..482bfb2 100644
+--- a/android/app/src/main/assets/www/widgets/basic.js
++++ b/android/app/src/main/assets/www/widgets/basic.js
+@@ -9,10 +9,10 @@ W.clock = {
+   bare: true, needs: ['tick', 'state', 'weather', 'quotas', 'work'],
+   create(box, { o }) {
+     const status = o.status !== false ? h('div', 'status') : null;
+-    const hh = h('span', 'hh', '--'), mm = h('span', 'mm', '--'), ss = h('span', 'sec');
++    const hh = h('span', 'hh', '--'), mm = h('span', 'mm', '--'), ss = h('span', 'sec'), colon = h('span', 'colon', ':');
+     const date = o.date !== false ? h('div', 'date') : null;
+     const wx = o.weather !== false ? wxBlock() : null;
+-    box.append(status || '', h('div', 'clock', hh, h('span', 'colon', ':'), mm, ss), date || '', wx || '');
++    box.append(status || '', h('div', 'clock', hh, colon, mm, ss), date || '', wx || '');
+     box.style.setProperty('--tf', (0.84 - (status ? 0.1 : 0) - (date ? 0.11 : 0) - (wx ? 0.2 : 0)).toFixed(2));
+     return {
+       update(kind) {
+@@ -21,6 +21,7 @@ W.clock = {
+           hh.textContent = pad(now.getHours());
+           mm.textContent = pad(now.getMinutes());
+           ss.textContent = cfg.display?.showSeconds === false ? '' : pad(now.getSeconds());
++          colon.classList.toggle('dim', now.getSeconds() % 2 === 1);   // was a CSS blink running every frame
+           if (date) date.textContent = now.toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long' });
+           if (status && now.getSeconds() % 30 === 0) renderStatus(status); // battery
+         } else if (kind === 'weather') wx?.update();

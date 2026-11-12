@@ -1,0 +1,23 @@
+PhoneBox 0.6.9 — panel: every page is its own compositor layer.
+Why: during the 0001 settle the pager has overflow-x: hidden; Chromium does not composite a scroller the user cannot scroll, so every
+settle frame repainted and re-rastered the visible strip on the main thread / GPU. In Android WebView GPU raster runs inside the
+RenderThread draw functor -> 'Slow issue draw commands' on the phone.
+- .page { will-change: transform }. Settle logic unchanged.
+Measured (Chromium 1234, GPU raster via SwiftShader, 873x393 @2.75, CPU x6, 8 swipes x 3 runs, median per swipe):
+raster tasks 69.6 -> 25 (upstream 40.4) · GPU thread 219 -> 134 ms (upstream 139) · page misses 0.
+
+diff --git a/android/app/src/main/assets/www/style.css b/android/app/src/main/assets/www/style.css
+index 8149636..d89665f 100644
+--- a/android/app/src/main/assets/www/style.css
++++ b/android/app/src/main/assets/www/style.css
+@@ -79,6 +79,10 @@ button { font: inherit; color: inherit; background: none; border: 0; }
+   scroll-snap-align: start;
+   scroll-snap-stop: always;
+   padding: 10px var(--pad-r) 17px var(--pad-l);
++  /* Each page is its own compositor layer. While a page settles (0001: overflow-x hidden makes the pager a non-composited
++     scroller) and while a finger drags, moving pages is then a layer move, not a repaint + re-raster of the whole strip;
++     a 1 Hz widget update re-rasters only its own page. PERF-SCROLL-2026-11-10.md TP-W3-12. */
++  will-change: transform;
+ }
+ .grid {
+   height: 100%;

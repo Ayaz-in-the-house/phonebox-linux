@@ -1,0 +1,52 @@
+{
+ "endpoint": "/api/catalog",
+ "status": 200,
+ "content_type": "application/json; charset=utf-8",
+ "bytes": 30182,
+ "shape": {
+  "cols": "int",
+  "rows": "int",
+  "templates": [
+   {
+    "desc": "str",
+    "icon": "str",
+    "id": "str",
+    "title": "str",
+    "widgets": [
+     {
+      "h": "int",
+      "options": {
+       "status": "bool",
+       "weather": "bool"
+      },
+      "type": "str",
+      "w": "int",
+      "x": "int",
+      "y": "int"
+     }
+    ]
+   }
+  ],
+  "widgets": [
+   {
+    "category": "str",
+    "desc": "str",
+    "h": "int",
+    "icon": "str",
+    "minH": "int",
+    "minW": "int",
+    "name": "str",
+    "options": [
+     {
+      "default": "bool",
+      "key": "str",
+      "label": "str",
+      "type": "str"
+     }
+    ],
+    "type": "str",
+    "w": "int"
+   }
+  ]
+ }
+}
